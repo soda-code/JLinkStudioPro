@@ -27,6 +27,9 @@ public sealed class NavSidebar : Control
     private const int ItemGap = 4;
     private const int GroupHeight = 26;
     private const int UserHeight = 66;
+
+    /// <summary>版本号用的加粗小字号，静态复用避免每帧新建字体。</summary>
+    private static readonly Font VersionFont = DarkGeekTheme.CreateFontPublic(8f, FontStyle.Bold);
     private const int IconShift = 2;
     private const int IconSize = 17;
 
@@ -419,12 +422,12 @@ public sealed class NavSidebar : Control
             new Rectangle(52, _userRect.Y + 34, Width - 60, 18), DarkGeekTheme.NavTextMuted,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
-        // 版本号与角色同一行右对齐：不额外占高度，任何子界面都常驻可见
+        // 版本号单独一行显示在「角色」下面，加粗，任何子界面（含主页）都常驻可见
         if (!string.IsNullOrEmpty(VersionText))
         {
-            TextRenderer.DrawText(g, VersionText, DarkGeekTheme.UiFontSmall,
-                new Rectangle(52, _userRect.Y + 34, Width - 66, 18), DarkGeekTheme.Primary,
-                TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, VersionText, VersionFont,
+                new Rectangle(52, _userRect.Y + 48, Width - 60, 16), DarkGeekTheme.Primary,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 }
