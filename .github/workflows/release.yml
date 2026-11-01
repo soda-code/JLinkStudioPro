@@ -29,6 +29,10 @@ jobs:
         run: |
           Get-ChildItem dist/app -Filter *.pdb -ErrorAction SilentlyContinue | Remove-Item -Force
           $tag = '${{ github.ref_name }}'
+          # 许可随包分发：程序包与 skill 包都必须带 LICENSE（自定义许可未随包=用户无从知晓条款）
+          Copy-Item LICENSE dist/app/LICENSE -Force
+          Copy-Item README.md dist/app/README.md -Force
+          Copy-Item LICENSE skill/jlink-studio-pro/LICENSE -Force
           Compress-Archive -Path (Get-ChildItem dist/app).FullName `
             -DestinationPath "dist/JLinkStudioPro-$tag-win-x64.zip" -Force
           Compress-Archive -Path skill/jlink-studio-pro/* `
