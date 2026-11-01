@@ -398,35 +398,18 @@ public sealed class NavSidebar : Control
         using var line = new Pen(DarkGeekTheme.SidebarBorder);
         g.DrawLine(line, 0, _userRect.Y, Width, _userRect.Y);
 
-        int avatarSize = 30;
-        int avatarX = Collapsed ? (Width - avatarSize) / 2 : 14;
-        var avatarRect = new Rectangle(avatarX, _userRect.Y + 18, avatarSize, avatarSize);
-
-        using (var path = new GraphicsPath())
-        {
-            path.AddEllipse(avatarRect);
-            using var brush = new LinearGradientBrush(avatarRect, DarkGeekTheme.Primary, DarkGeekTheme.PrimaryDim, 45f);
-            g.FillPath(brush, path);
-        }
-
-        TextRenderer.DrawText(g, "JL", DarkGeekTheme.CreateFontPublic(8.5f, FontStyle.Bold), avatarRect, Color.White,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-
         if (Collapsed) return;
 
-        TextRenderer.DrawText(g, UserName, DarkGeekTheme.CreateFontPublic(9.5f, FontStyle.Bold),
-            new Rectangle(52, _userRect.Y + 14, Width - 60, 20), DarkGeekTheme.TextPrimary,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-
+        // 去掉头像与用户名，只保留两行左对齐：角色 + 版本号
         TextRenderer.DrawText(g, UserRole, DarkGeekTheme.UiFontSmall,
-            new Rectangle(52, _userRect.Y + 34, Width - 60, 18), DarkGeekTheme.NavTextMuted,
+            new Rectangle(20, _userRect.Y + 16, Width - 30, 18), DarkGeekTheme.NavTextMuted,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
         // 版本号单独一行显示在「角色」下面，加粗，任何子界面（含主页）都常驻可见
         if (!string.IsNullOrEmpty(VersionText))
         {
             TextRenderer.DrawText(g, VersionText, VersionFont,
-                new Rectangle(52, _userRect.Y + 48, Width - 60, 16), DarkGeekTheme.Primary,
+                new Rectangle(20, _userRect.Y + 36, Width - 30, 16), DarkGeekTheme.Primary,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
