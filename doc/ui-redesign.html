@@ -1,0 +1,1039 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JLinkStudio Pro · UI 重设计原型</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  html, body { height: 100%; }
+  body { font-family: "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif; }
+
+  /* 圆角滚动条（第 10 节规范） */
+  .scroll-themed { --sb-track: #e2e8f0; --sb-thumb: #94a3b8; --sb-thumb-hover: #64748b; }
+  .scroll-dark { --sb-track: rgb(15 23 42 / 0.5); --sb-thumb: #475569; --sb-thumb-hover: #64748b; }
+  .scroll-term { --sb-track: #27272a; --sb-thumb: #52525b; --sb-thumb-hover: #71717a; }
+
+  .scroll-themed::-webkit-scrollbar { width: 10px; height: 10px; }
+  .scroll-themed::-webkit-scrollbar-track { background: var(--sb-track); border-radius: 9999px; }
+  .scroll-themed::-webkit-scrollbar-thumb {
+    background: var(--sb-thumb); border-radius: 9999px;
+    border: 2px solid transparent; background-clip: padding-box;
+  }
+  .scroll-themed::-webkit-scrollbar-thumb:hover { background: var(--sb-thumb-hover); background-clip: padding-box; }
+  .scroll-themed::-webkit-scrollbar-corner { background: transparent; }
+
+  @supports not selector(::-webkit-scrollbar) {
+    .scroll-themed { scrollbar-width: thin; scrollbar-color: var(--sb-thumb) var(--sb-track); }
+  }
+
+  /* RTT 终端配色 */
+  .term-line { white-space: pre-wrap; word-break: break-all; }
+</style>
+</head>
+<body class="h-full bg-zinc-200/70 p-2 sm:p-4">
+
+<div class="h-full flex flex-col bg-[#f8fafc] rounded-xl border border-zinc-300 shadow-lg overflow-hidden">
+
+  <!-- ── 标题栏 ───────────────────────────────────────────────── -->
+  <div class="h-9 shrink-0 flex items-center gap-2 px-3 bg-zinc-100 border-b border-zinc-200 text-xs text-zinc-600">
+    <span class="w-4 h-4 rounded bg-blue-600"></span>
+    <span class="font-medium">JLinkStudio Pro</span>
+    <div class="ml-auto flex items-center gap-1">
+      <button class="w-7 h-6 rounded-md hover:bg-zinc-200 transition-all duration-150">–</button>
+      <button class="w-7 h-6 rounded-md hover:bg-zinc-200 transition-all duration-150">□</button>
+      <button class="w-7 h-6 rounded-md hover:bg-red-100 hover:text-red-600 transition-all duration-150">✕</button>
+    </div>
+  </div>
+
+  <!-- ── 全局顶栏 ─────────────────────────────────────────────── -->
+  <header class="h-16 shrink-0 flex items-center gap-3 sm:gap-5 px-4 bg-white border-b border-zinc-200">
+    <button id="menuBtn" class="md:hidden px-2 py-1 rounded-lg border border-zinc-200 bg-white text-xs">☰</button>
+
+    <div>
+      <div class="text-base font-bold text-zinc-900 leading-tight">JLinkStudio Pro</div>
+      <div class="text-xs text-zinc-500">J-Link · RTT · 变量 · 寄存器</div>
+    </div>
+
+    <div class="hidden sm:block">
+      <div class="flex items-center gap-1.5 text-sm text-zinc-800">
+        <span id="connDot" class="w-2 h-2 rounded-full bg-zinc-400"></span>
+        <span id="connText">未连接</span>
+      </div>
+      <div id="connSub" class="text-xs text-zinc-500">未连接（演示数据）</div>
+    </div>
+
+    <div class="ml-auto flex items-center gap-2">
+      <button id="btnConnect" class="px-3.5 py-1.5 text-xs font-medium rounded-lg border border-blue-700/30 bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition-all duration-150 active:scale-[0.98]">
+        连接
+      </button>
+      <button id="btnReset" disabled class="hidden sm:inline-flex px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100">
+        J-Link 复位
+      </button>
+      <span class="hidden lg:inline text-xs font-semibold text-blue-600">模式: <span id="modeText">调试</span></span>
+      <span class="hidden lg:inline text-xs text-zinc-600">工程师</span>
+      <span id="clock" class="hidden sm:inline text-xs font-mono tabular-nums text-zinc-700">--:--:--</span>
+    </div>
+  </header>
+
+  <!-- ── 主体 ─────────────────────────────────────────────────── -->
+  <div class="relative flex-1 min-h-0 flex">
+
+    <div id="overlay" class="hidden absolute inset-0 z-30 bg-slate-900/40 md:hidden"></div>
+
+    <!-- 侧边栏 -->
+    <aside id="sidebar"
+      class="absolute inset-y-0 left-0 z-40 w-64 -translate-x-full md:static md:translate-x-0 md:w-16 lg:w-64
+             shrink-0 flex flex-col bg-white border-r border-zinc-200 transition-transform duration-150">
+
+      <!-- 01 模式组 -->
+      <div class="shrink-0 p-3">
+        <div class="bg-zinc-50 border border-zinc-200 rounded-xl p-1.5 space-y-1">
+          <a href="#" data-mode="debug"
+             class="relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-semibold text-blue-700 bg-blue-50 transition-all duration-150 md:justify-center lg:justify-start">
+            <span data-mode-line class="absolute left-0 inset-y-1.5 w-0.5 rounded-full bg-blue-600"></span>
+            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+            <span class="md:hidden lg:inline">调试模式</span>
+          </a>
+          <a href="#" data-mode="monitor"
+             class="relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-all duration-150 md:justify-center lg:justify-start">
+            <span data-mode-line class="hidden absolute left-0 inset-y-1.5 w-0.5 rounded-full bg-blue-600"></span>
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span class="md:hidden lg:inline">查看模式</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- 02 功能导航 -->
+      <nav class="scroll-themed flex-1 min-h-0 overflow-y-auto border-t border-zinc-200 px-3 py-2 space-y-1">
+        <a href="#rtt" data-nav="rtt" class="group relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-all duration-150 md:justify-center lg:justify-start">
+          <span data-line class="hidden absolute left-0 inset-y-1.5 w-0.5 rounded-full bg-blue-600"></span>
+          <svg class="w-4 h-4 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H4.5A2.25 2.25 0 002.25 6v12A2.25 2.25 0 004.5 20.25z"/></svg>
+          <span class="md:hidden lg:inline">RTT 极速终端</span>
+          <span data-badge class="hidden ml-auto px-1.5 text-[11px] font-mono tabular-nums rounded-full bg-red-50 text-red-600 border border-red-200">0</span>
+        </a>
+
+        <a href="#vars" data-nav="vars" class="group relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-all duration-150 md:justify-center lg:justify-start">
+          <span data-line class="hidden absolute left-0 inset-y-1.5 w-0.5 rounded-full bg-blue-600"></span>
+          <svg class="w-4 h-4 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.5l4.5-6 3.75 5.25L15 6l6 9"/></svg>
+          <span class="md:hidden lg:inline">变量监控与波形</span>
+        </a>
+
+        <a href="#regs" data-nav="regs" class="group relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-all duration-150 md:justify-center lg:justify-start">
+          <span data-line class="hidden absolute left-0 inset-y-1.5 w-0.5 rounded-full bg-blue-600"></span>
+          <svg class="w-4 h-4 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 3v2.25M15.75 3v2.25M8.25 18.75V21M15.75 18.75V21M3 8.25h2.25M3 15.75h2.25M18.75 8.25H21M18.75 15.75H21M5.25 5.25h13.5v13.5H5.25z"/></svg>
+          <span class="md:hidden lg:inline">硬件寄存器</span>
+        </a>
+
+        <a href="#log" data-nav="log" class="group relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-all duration-150 md:justify-center lg:justify-start">
+          <span data-line class="hidden absolute left-0 inset-y-1.5 w-0.5 rounded-full bg-blue-600"></span>
+          <svg class="w-4 h-4 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12M8.25 17.25h12M3.75 6.75h.008v.008H3.75zM3.75 12h.008v.008H3.75zM3.75 17.25h.008v.008H3.75z"/></svg>
+          <span class="md:hidden lg:inline">运行日志</span>
+        </a>
+
+        <a href="#skill" data-nav="skill" class="group relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-all duration-150 md:justify-center lg:justify-start">
+          <span data-line class="hidden absolute left-0 inset-y-1.5 w-0.5 rounded-full bg-blue-600"></span>
+          <svg class="w-4 h-4 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 3.75h7.5v3h3v7.5h-3v3h-7.5v-3h-3V6.75h3z"/></svg>
+          <span class="md:hidden lg:inline">Skill 网关</span>
+          <span data-badge class="hidden ml-auto px-1.5 text-[11px] font-mono tabular-nums rounded-full bg-red-50 text-red-600 border border-red-200">0</span>
+        </a>
+
+        <a href="#settings" data-nav="settings" class="group relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-all duration-150 md:justify-center lg:justify-start">
+          <span data-line class="hidden absolute left-0 inset-y-1.5 w-0.5 rounded-full bg-blue-600"></span>
+          <svg class="w-4 h-4 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.34 3.94c.26-1.05 1.75-1.05 2.01 0l.18.72c.2.83 1.2 1.2 1.9.7l.6-.42c.89-.62 1.94.43 1.32 1.32l-.42.6c-.5.7-.13 1.7.7 1.9l.72.18c1.05.26 1.05 1.75 0 2.01l-.72.18c-.83.2-1.2 1.2-.7 1.9l.42.6c.62.89-.43 1.94-1.32 1.32l-.6-.42c-.7-.5-1.7-.13-1.9.7l-.18.72c-.26 1.05-1.75 1.05-2.01 0l-.18-.72c-.2-.83-1.2-1.2-1.9-.7l-.6.42c-.89.62-1.94-.43-1.32-1.32l.42-.6c.5-.7.13-1.7-.7-1.9l-.72-.18c-1.05-.26-1.05-1.75 0-2.01l.72-.18c.83-.2 1.2-1.2.7-1.9l-.42-.6c-.62-.89.43-1.94 1.32-1.32l.6.42c.7.5 1.7.13 1.9-.7z"/><circle cx="12" cy="12" r="2.4"/></svg>
+          <span class="md:hidden lg:inline">设置</span>
+        </a>
+      </nav>
+
+      <!-- 03 底栏 -->
+      <div class="shrink-0 border-t border-zinc-200 p-3 space-y-2">
+        <button id="btnDisconnect" class="w-full px-3 py-2 rounded-lg bg-white hover:bg-red-50 text-red-600 text-sm font-medium border border-red-300 shadow-sm transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
+          <span class="md:hidden lg:inline">断开目标</span><span class="hidden md:inline lg:hidden">⏻</span>
+        </button>
+        <div class="md:hidden lg:block text-[11px] leading-tight">
+          <div class="font-mono tabular-nums text-zinc-700">V1.00.001.R</div>
+          <div class="text-zinc-500">嵌入式工程师</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 子界面区 -->
+    <main class="flex-1 min-w-0 flex flex-col">
+      <div id="content" class="flex-1 min-h-0 overflow-hidden p-4">
+        <div id="page-root" class="h-full flex flex-col gap-3 min-h-0"></div>
+      </div>
+
+      <footer class="h-8 shrink-0 flex items-center gap-4 px-4 bg-white/80 border-t border-zinc-200 text-[11px] text-zinc-500 font-mono tabular-nums">
+        <span>采样 <span id="stRate">200</span> Hz</span>
+        <span>RTT <span id="stRtt">—</span></span>
+        <span>缓冲 <span id="stBuf">—</span></span>
+        <span>最后更新 <span id="stTime">--:--:--.---</span></span>
+        <span id="stHint" class="truncate font-sans">调试模式：可读写变量与寄存器</span>
+        <span id="stSource" class="ml-auto px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 font-sans">演示数据</span>
+      </footer>
+    </main>
+  </div>
+</div>
+
+<!-- ══════════ 子界面模板 ══════════ -->
+
+<!-- RTT 极速终端 -->
+<template id="tpl-rtt">
+  <div class="shrink-0 flex flex-wrap items-center gap-2">
+    <span class="text-xs text-zinc-500">通道</span>
+    <div class="inline-flex p-0.5 rounded-lg bg-zinc-100 border border-zinc-200" data-group="channel">
+      <button data-ch="0" class="px-3 py-1 text-xs rounded-md border border-transparent text-zinc-600 hover:bg-white transition-all duration-150">Ch0</button>
+      <button data-ch="1" class="px-3 py-1 text-xs rounded-md border border-transparent text-zinc-600 hover:bg-white transition-all duration-150">Ch1</button>
+      <button data-ch="2" class="px-3 py-1 text-xs rounded-md border border-transparent text-zinc-600 hover:bg-white transition-all duration-150">Ch2</button>
+    </div>
+    <button id="rttStart" class="px-3.5 py-1.5 text-xs font-medium rounded-lg border border-blue-700/30 bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition-all duration-150 active:scale-[0.98]">启动 RTT</button>
+    <button id="rttStop" disabled class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">停止</button>
+    <span class="text-xs text-zinc-500 ml-1">级别</span>
+    <div class="inline-flex p-0.5 rounded-lg bg-zinc-100 border border-zinc-200" data-group="level">
+      <button data-lv="all" class="px-3 py-1 text-xs rounded-md border border-transparent text-zinc-600 hover:bg-white transition-all duration-150">ALL</button>
+      <button data-lv="info" class="px-3 py-1 text-xs rounded-md border border-transparent text-zinc-600 hover:bg-white transition-all duration-150">INFO</button>
+      <button data-lv="warn" class="px-3 py-1 text-xs rounded-md border border-transparent text-zinc-600 hover:bg-white transition-all duration-150">WARN</button>
+      <button data-lv="error" class="px-3 py-1 text-xs rounded-md border border-transparent text-zinc-600 hover:bg-white transition-all duration-150">ERROR</button>
+    </div>
+  </div>
+
+  <div class="shrink-0 flex flex-wrap items-center gap-2">
+    <input id="rttFilter" placeholder="正则过滤 / 高亮关键字" class="w-64 px-3 py-1.5 text-xs font-mono bg-white border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-150">
+    <label class="inline-flex items-center gap-1.5 text-xs text-zinc-600"><input id="rttPause" type="checkbox" class="accent-blue-600 w-4 h-4">暂停滚屏</label>
+    <label class="inline-flex items-center gap-1.5 text-xs text-zinc-600"><input id="rttFollow" type="checkbox" checked class="accent-blue-600 w-4 h-4">自动滚动</label>
+    <button id="rttClear" class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">清空</button>
+    <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">导出 .log</button>
+    <span class="text-xs text-zinc-500">ANSI 彩色 · 毫秒时间戳</span>
+  </div>
+
+  <section class="flex-1 min-h-0 flex flex-col bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+    <h2 class="shrink-0 flex items-center gap-2 px-4 py-2 text-xs text-zinc-500 border-b border-zinc-200">
+      <span class="w-2 h-2 rounded-full bg-emerald-500"></span>RTT 实时输出
+      <span class="ml-auto font-mono tabular-nums" id="rttCount">0 行</span>
+    </h2>
+    <div id="rttOut" class="scroll-themed scroll-term flex-1 min-h-0 overflow-auto bg-zinc-900 text-emerald-400 font-mono text-xs p-3.5 leading-relaxed"></div>
+    <div class="shrink-0 flex items-center gap-2 px-3 py-2 border-t border-zinc-200 bg-white">
+      <input id="rttSend" placeholder="输入指令后回车下发到目标板…" class="flex-1 min-w-0 px-3 py-1.5 text-xs font-mono bg-white border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-150">
+      <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-700/30 bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition-all duration-150 active:scale-[0.98]">发送</button>
+      <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">转速=1000</button>
+      <span id="rttPill" class="px-2 py-0.5 text-[11px] rounded-full border border-zinc-200 bg-zinc-50 text-zinc-500">采集未启动</span>
+    </div>
+  </section>
+</template>
+
+<!-- 变量监控与波形 -->
+<template id="tpl-vars">
+  <div class="shrink-0 flex flex-wrap items-center gap-2">
+    <input placeholder="搜索 ELF 符号（如 g_motorPid.kp）" class="w-64 px-3 py-1.5 text-xs font-mono bg-white border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-150">
+    <button class="px-3.5 py-1.5 text-xs font-medium rounded-lg border border-blue-700/30 bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition-all duration-150 active:scale-[0.98]">+ 添加监控</button>
+    <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">重载 ELF</button>
+    <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-red-300 bg-white hover:bg-red-50 text-red-600 shadow-sm transition-all duration-150 active:scale-[0.98]">清空</button>
+    <span class="text-xs text-zinc-500 ml-auto">监控 6 项 · 符号库 1284 项</span>
+  </div>
+
+  <div class="shrink-0 flex flex-wrap items-center gap-2">
+    <div class="inline-flex p-0.5 rounded-lg bg-zinc-100 border border-zinc-200">
+      <button data-view="table" class="px-3 py-1 text-xs rounded-md font-medium bg-blue-50 text-blue-700 border border-blue-200">变量列表</button>
+      <button data-view="chart" class="px-3 py-1 text-xs rounded-md border border-transparent text-zinc-600 hover:bg-white transition-all duration-150">实时曲线</button>
+    </div>
+    <span class="text-xs text-zinc-500">采样</span>
+    <select class="px-3 py-1.5 pr-8 text-xs font-mono rounded-lg border border-zinc-200 bg-white text-zinc-700 appearance-none cursor-pointer">
+      <option>10 Hz</option><option>50 Hz</option><option selected>200 Hz</option><option>500 Hz</option>
+    </select>
+    <label class="inline-flex items-center gap-1.5 text-xs text-zinc-600"><input type="checkbox" class="accent-blue-600 w-4 h-4">暂停波形</label>
+    <label class="inline-flex items-center gap-1.5 text-xs text-zinc-600"><input type="checkbox" checked class="accent-blue-600 w-4 h-4">自动跟随</label>
+    <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">导出 CSV</button>
+  </div>
+
+  <!-- 表格视图 -->
+  <section data-panel="table" class="flex-1 min-h-0 flex flex-col bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+    <h2 class="shrink-0 px-4 py-2 text-xs text-zinc-500 border-b border-zinc-200">变量监控</h2>
+    <div class="scroll-themed flex-1 min-h-0 overflow-auto">
+      <table class="w-full table-fixed text-xs border-separate border-spacing-0">
+        <colgroup>
+          <col class="w-10"><col class="w-14"><col class="w-16"><col class="w-56"><col class="w-32"><col class="w-28"><col class="w-32"><col class="w-24"><col class="w-20">
+        </colgroup>
+        <thead class="sticky top-0 z-10 bg-zinc-100 text-zinc-700 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:border-b [&_th]:border-r [&_th]:border-zinc-200">
+          <tr><th></th><th>波形</th><th>颜色</th><th>变量名称</th><th>地址</th><th>类型</th><th>当前值</th><th>格式</th><th>Skill</th></tr>
+        </thead>
+        <tbody id="varRows" class="[&_td]:h-8 [&_td]:px-3 [&_td]:border-b [&_td]:border-r [&_td]:border-zinc-200 [&>tr:hover]:bg-blue-50/50"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 曲线视图 -->
+  <section data-panel="chart" class="hidden flex-1 min-h-0 flex flex-col bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+    <h2 class="shrink-0 flex items-center gap-3 px-4 py-2 text-xs text-zinc-500 border-b border-zinc-200">
+      实时多通道波形
+      <span class="ml-auto flex items-center gap-3 font-mono tabular-nums">
+        <span class="text-blue-600">● g_actualSpeed</span>
+        <span class="text-emerald-600">● g_targetSpeed</span>
+        <span class="text-amber-600">● g_motorPid.kp</span>
+      </span>
+    </h2>
+    <div class="flex-1 min-h-0 p-3">
+      <canvas id="wave" class="w-full h-full rounded-lg bg-zinc-50 border border-zinc-200"></canvas>
+    </div>
+  </section>
+</template>
+
+<!-- 硬件寄存器 -->
+<template id="tpl-regs">
+  <div class="shrink-0 flex flex-wrap items-center gap-2">
+    <input placeholder="过滤外设…" class="w-56 px-3 py-1.5 text-xs font-mono bg-white border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-150">
+    <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">重载 SVD</button>
+    <button class="px-3.5 py-1.5 text-xs font-medium rounded-lg border border-blue-700/30 bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition-all duration-150 active:scale-[0.98]">读取</button>
+    <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">异常快照</button>
+    <span class="text-xs text-zinc-500 ml-auto">SVD: STM32F407.svd · 82 个外设</span>
+  </div>
+
+  <div class="flex-1 min-h-0 grid grid-cols-3 gap-3">
+    <section class="col-span-1 min-h-0 flex flex-col bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+      <h2 class="shrink-0 px-4 py-2 text-xs text-zinc-500 border-b border-zinc-200">外设分类树</h2>
+      <div id="periphList" class="scroll-themed flex-1 min-h-0 overflow-auto p-1.5 space-y-0.5 text-xs font-mono"></div>
+    </section>
+
+    <section class="col-span-2 min-h-0 flex flex-col bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+      <h2 class="shrink-0 flex items-center px-4 py-2 text-xs text-zinc-500 border-b border-zinc-200">
+        寄存器列表 <span id="regTitle" class="ml-2 text-zinc-400 font-mono">USART1</span>
+        <span class="ml-auto font-mono tabular-nums text-zinc-400">0x40011000</span>
+      </h2>
+      <div class="scroll-themed flex-1 min-h-0 overflow-auto">
+        <table class="w-full table-fixed text-xs border-separate border-spacing-0">
+          <colgroup><col class="w-32"><col class="w-36"><col class="w-36"><col class="w-28"><col></colgroup>
+          <thead class="sticky top-0 z-10 bg-zinc-100 text-zinc-700 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:border-b [&_th]:border-r [&_th]:border-zinc-200">
+            <tr><th>寄存器</th><th>当前值</th><th>复位值</th><th>权限</th><th>说明</th></tr>
+          </thead>
+          <tbody id="regRows" class="[&_td]:h-8 [&_td]:px-3 [&_td]:border-b [&_td]:border-r [&_td]:border-zinc-200 [&>tr:hover]:bg-blue-50/50"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</template>
+
+<!-- 运行日志 -->
+<template id="tpl-log">
+  <div class="shrink-0 flex flex-wrap items-center gap-2">
+    <select class="px-3 py-1.5 pr-8 text-xs font-mono rounded-lg border border-zinc-200 bg-white text-zinc-700 appearance-none cursor-pointer">
+      <option>全部类别</option><option>运行与连接</option><option>Skill 审计</option>
+    </select>
+    <input placeholder="关键字过滤…" class="w-64 px-3 py-1.5 text-xs font-mono bg-white border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-150">
+    <label class="inline-flex items-center gap-1.5 text-xs text-zinc-600"><input type="checkbox" checked class="accent-blue-600 w-4 h-4">自动滚动</label>
+    <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">清空</button>
+    <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">导出…</button>
+    <span class="text-xs text-zinc-500 ml-auto">连接 · 工程 · Skill 审计</span>
+  </div>
+
+  <section class="flex-1 min-h-0 flex flex-col bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+    <h2 class="shrink-0 px-4 py-2 text-xs text-zinc-500 border-b border-zinc-200">运行日志</h2>
+    <div class="scroll-themed flex-1 min-h-0 overflow-auto">
+      <table class="w-full table-fixed text-xs border-separate border-spacing-0">
+        <colgroup><col class="w-32"><col class="w-32"><col class="w-28"><col></colgroup>
+        <thead class="sticky top-0 z-10 bg-zinc-100 text-zinc-700 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:border-b [&_th]:border-r [&_th]:border-zinc-200">
+          <tr><th>时间</th><th>来源</th><th>级别</th><th>内容</th></tr>
+        </thead>
+        <tbody id="logRows" class="[&_td]:h-8 [&_td]:px-3 [&_td]:border-b [&_td]:border-r [&_td]:border-zinc-200 [&>tr:hover]:bg-blue-50/50"></tbody>
+      </table>
+    </div>
+  </section>
+</template>
+
+<!-- Skill 网关 -->
+<template id="tpl-skill">
+  <section class="flex-1 min-h-0 flex flex-col bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+    <div class="scroll-themed flex-1 min-h-0 overflow-auto p-4 space-y-4">
+
+      <div>
+        <div class="flex items-center gap-2 mb-2">
+          <h2 class="text-sm font-semibold text-zinc-800">Skill 自动化网关</h2>
+          <span class="text-xs text-zinc-500">REST + WebSocket + Swagger</span>
+          <span id="gwPill" class="px-2 py-0.5 text-[11px] rounded-full border border-zinc-200 bg-zinc-50 text-zinc-500">未启动</span>
+        </div>
+        <div class="bg-zinc-50/80 rounded-lg border border-zinc-200/80 p-3 flex flex-wrap items-center gap-2">
+          <span class="text-xs text-zinc-500">监听端口</span>
+          <input value="5080" class="w-24 px-2.5 py-1.5 text-xs font-mono bg-white border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
+          <button class="px-3.5 py-1.5 text-xs font-medium rounded-lg border border-blue-700/30 bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition-all duration-150 active:scale-[0.98]">启动服务</button>
+          <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">停止</button>
+          <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">复制 Swagger</button>
+          <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">复制 MCP 配置</button>
+          <div class="w-full mt-1 text-xs font-mono text-zinc-600 leading-relaxed">
+            REST&nbsp;&nbsp;&nbsp;&nbsp; http://127.0.0.1:5080/api/v1<br>
+            WebSocket ws://127.0.0.1:5080/ws/stream
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center gap-2 mb-2">
+          <h2 class="text-sm font-semibold text-zinc-800">数据白名单与写保护</h2>
+          <span class="text-xs text-zinc-500">防止 AI 写入越界参数</span>
+        </div>
+        <div class="bg-zinc-50/80 rounded-lg border border-zinc-200/80 p-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <label class="inline-flex items-center gap-1.5 text-xs text-zinc-600">
+              <input type="checkbox" checked class="accent-blue-600 w-4 h-4">允许 Skill 写入（关闭后仅可读）
+            </label>
+            <button class="ml-auto px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-700/30 bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition-all duration-150 active:scale-[0.98]">应用范围</button>
+          </div>
+          <table class="w-full table-fixed text-xs border-separate border-spacing-0">
+            <colgroup><col class="w-56"><col class="w-28"><col class="w-28"><col class="w-24"><col></colgroup>
+            <thead class="bg-zinc-100 text-zinc-700 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:border-b [&_th]:border-r [&_th]:border-zinc-200">
+              <tr><th>变量名</th><th>最小值</th><th>最大值</th><th>允许写</th><th>备注</th></tr>
+            </thead>
+            <tbody class="[&_td]:h-8 [&_td]:px-3 [&_td]:border-b [&_td]:border-r [&_td]:border-zinc-200">
+              <tr><td class="font-mono">g_motorPid.*</td><td class="font-mono tabular-nums text-right">0</td><td class="font-mono tabular-nums text-right">100</td><td class="text-center"><input type="checkbox" checked class="accent-blue-600 w-4 h-4"></td><td class="text-zinc-500">PID 参数</td></tr>
+              <tr><td class="font-mono">g_targetSpeed</td><td class="font-mono tabular-nums text-right">0</td><td class="font-mono tabular-nums text-right">3000</td><td class="text-center"><input type="checkbox" checked class="accent-blue-600 w-4 h-4"></td><td class="text-zinc-500">目标转速</td></tr>
+              <tr><td class="font-mono">*</td><td class="font-mono text-right text-zinc-400">—</td><td class="font-mono text-right text-zinc-400">—</td><td class="text-center"><input type="checkbox" class="accent-blue-600 w-4 h-4"></td><td class="text-zinc-500">默认只读</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="flex flex-col min-h-0">
+          <div class="flex items-center gap-2 mb-2">
+            <h2 class="text-sm font-semibold text-zinc-800">诊断报告输出</h2>
+            <span class="text-xs text-zinc-500">异常快照 · AI 结论</span>
+          </div>
+          <div class="bg-zinc-50/80 rounded-lg border border-zinc-200/80 p-3 flex flex-col gap-2">
+            <div class="flex items-center gap-2">
+              <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">抓取 HardFault 现场</button>
+              <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">清空</button>
+            </div>
+            <pre class="h-40 overflow-auto scroll-themed bg-white border border-zinc-200 rounded-lg p-3 text-[11px] font-mono text-zinc-600 leading-relaxed">> 等待诊断任务…
+{ "state": "HardFault", "pc": "0x08004C2E", "lr": "0xFFFFFFFD" }</pre>
+          </div>
+        </div>
+
+        <div class="flex flex-col min-h-0">
+          <div class="flex items-center gap-2 mb-2">
+            <h2 class="text-sm font-semibold text-zinc-800">实时交互审计流</h2>
+            <span class="text-xs text-zinc-500">每一次外部 Skill 调用</span>
+            <button class="ml-auto px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">清空视图</button>
+          </div>
+          <div class="bg-zinc-50/80 rounded-lg border border-zinc-200/80 p-0 overflow-hidden max-h-56">
+            <div class="scroll-themed overflow-auto max-h-56">
+              <table class="w-full table-fixed text-xs border-separate border-spacing-0">
+                <colgroup><col class="w-24"><col class="w-24"><col class="w-20"><col></colgroup>
+                <thead class="sticky top-0 z-10 bg-zinc-100 text-zinc-700 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:border-b [&_th]:border-r [&_th]:border-zinc-200">
+                  <tr><th>时间</th><th>来源</th><th>方法</th><th>接口</th></tr>
+                </thead>
+                <tbody id="auditRows" class="[&_td]:h-8 [&_td]:px-3 [&_td]:border-b [&_td]:border-r [&_td]:border-zinc-200"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</template>
+
+<!-- 设置 -->
+<template id="tpl-settings">
+  <div class="shrink-0 flex items-center gap-1 bg-white border border-zinc-200 rounded-lg p-1 w-fit">
+    <button data-tab="mode" class="px-3 py-1.5 text-xs rounded-md font-medium bg-blue-50 text-blue-700 border border-blue-200">调试和查看模式</button>
+    <button data-tab="device" class="px-3 py-1.5 text-xs rounded-md border border-transparent text-zinc-600 hover:bg-zinc-100 transition-all duration-150">设备与工程配置</button>
+    <button data-tab="integration" class="px-3 py-1.5 text-xs rounded-md border border-transparent text-zinc-600 hover:bg-zinc-100 transition-all duration-150">集成与网关</button>
+    <button data-tab="about" class="px-3 py-1.5 text-xs rounded-md border border-transparent text-zinc-600 hover:bg-zinc-100 transition-all duration-150">驱动与关于</button>
+  </div>
+
+  <section class="flex-1 min-h-0 flex flex-col bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+    <div class="scroll-themed flex-1 min-h-0 overflow-auto p-4">
+
+      <div data-tabpane="mode" class="space-y-4">
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <h2 class="text-sm font-semibold text-zinc-800">运行模式</h2>
+            <span class="text-xs text-zinc-500">Debug / Inspect</span>
+          </div>
+          <div class="bg-zinc-50/80 rounded-lg border border-zinc-200/80 p-3 space-y-2">
+            <span class="px-2 py-0.5 text-[11px] rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">调试模式</span>
+            <p class="text-xs text-zinc-600">当前为调试模式：可自由读写目标内存、翻转寄存器位域并下发 RTT 指令。</p>
+            <div class="flex items-center gap-2">
+              <button class="px-3.5 py-1.5 text-xs font-medium rounded-lg border border-blue-700/30 bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition-all duration-150 active:scale-[0.98]">调试模式</button>
+              <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-700 shadow-sm transition-all duration-150 active:scale-[0.98]">查看模式</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <h2 class="text-sm font-semibold text-zinc-800">两种模式的差异</h2>
+            <span class="text-xs text-zinc-500">切换立即生效</span>
+          </div>
+          <div class="bg-zinc-50/80 rounded-lg border border-zinc-200/80 p-3 text-xs text-zinc-600 leading-relaxed">
+            <p class="font-medium text-zinc-800">调试模式</p>
+            <p>· 可读写变量、寄存器位域，可向目标板下发 RTT 指令</p>
+            <p>· 适合日常开发、在线调参与故障复现</p>
+            <p class="font-medium text-zinc-800 mt-2">查看模式</p>
+            <p>· 变量、寄存器与 RTT 指令下发入口全部拦截</p>
+            <p>· 适合演示、复盘、以及把现场交给 AI Agent 查看</p>
+          </div>
+        </div>
+      </div>
+
+      <div data-tabpane="device" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <h2 class="text-sm font-semibold text-zinc-800">J-Link 硬件连接</h2>
+            <span class="text-xs text-zinc-500">SEGGER J-Link / J-Trace</span>
+          </div>
+          <div class="bg-zinc-50/80 rounded-lg border border-zinc-200/80 p-3 space-y-2">
+            <div class="flex items-center gap-2"><span class="w-20 text-xs text-zinc-500">序列号</span>
+              <select class="flex-1 px-3 py-1.5 text-xs font-mono rounded-lg border border-zinc-200 bg-white text-zinc-700"><option>自动检测</option><option>607000317</option></select></div>
+            <div class="flex items-center gap-2"><span class="w-20 text-xs text-zinc-500">芯片型号</span>
+              <input value="STM32F407VG" class="flex-1 px-3 py-1.5 text-xs font-mono bg-white border border-zinc-200 rounded-lg text-zinc-800"></div>
+            <div class="flex items-center gap-2"><span class="w-20 text-xs text-zinc-500">接口</span>
+              <select class="flex-1 px-3 py-1.5 text-xs font-mono rounded-lg border border-zinc-200 bg-white text-zinc-700"><option>SWD</option><option>JTAG</option></select></div>
+            <div class="flex items-center gap-2"><span class="w-20 text-xs text-zinc-500">速率</span>
+              <select class="flex-1 px-3 py-1.5 text-xs font-mono rounded-lg border border-zinc-200 bg-white text-zinc-700"><option>4 MHz</option><option>1 MHz</option></select></div>
+            <div class="flex items-center gap-2 pt-1">
+              <button class="px-3.5 py-1.5 text-xs font-medium rounded-lg border border-blue-700/30 bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition-all duration-150 active:scale-[0.98]">连接</button>
+              <button disabled class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-white text-zinc-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">断开</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <h2 class="text-sm font-semibold text-zinc-800">调试符号与文件挂载</h2>
+            <span class="text-xs text-zinc-500">ELF / DWARF · CMSIS-SVD</span>
+          </div>
+          <div class="bg-zinc-50/80 rounded-lg border border-zinc-200/80 p-3 space-y-2">
+            <div class="flex items-center gap-2"><span class="w-20 text-xs text-zinc-500">固件符号</span>
+              <input readonly value="D:\Project\firmware\build\app.elf" class="flex-1 min-w-0 px-3 py-1.5 text-xs font-mono truncate bg-white border border-zinc-200 rounded-lg text-zinc-800">
+              <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-700 shadow-sm">浏览</button></div>
+            <div class="flex items-center gap-2"><span class="w-20 text-xs text-zinc-500">SVD 描述</span>
+              <input readonly value="D:\Project\svd\STM32F407.svd" class="flex-1 min-w-0 px-3 py-1.5 text-xs font-mono truncate bg-white border border-zinc-200 rounded-lg text-zinc-800">
+              <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-700 shadow-sm">浏览</button></div>
+            <label class="inline-flex items-center gap-1.5 text-xs text-zinc-600"><input type="checkbox" checked class="accent-blue-600 w-4 h-4">固件更新后自动重载符号</label>
+            <p class="text-[11px] text-zinc-500">支持拖拽 .elf / .svd 到本页直接挂载。</p>
+          </div>
+        </div>
+      </div>
+
+      <div data-tabpane="integration" class="hidden space-y-4">
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <h2 class="text-sm font-semibold text-zinc-800">Skill API 集成</h2>
+            <span class="text-xs text-zinc-500">REST · WebSocket · MCP</span>
+          </div>
+          <div class="bg-zinc-50/80 rounded-lg border border-zinc-200/80 p-3 space-y-2">
+            <p class="text-xs text-zinc-600 font-mono">http://127.0.0.1:5080/swagger</p>
+            <div class="flex gap-2">
+              <button class="px-3.5 py-1.5 text-xs font-medium rounded-lg border border-blue-700/30 bg-blue-600 hover:bg-blue-500 text-white shadow-sm">打开 Swagger 文档</button>
+              <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-700 shadow-sm">复制 MCP 配置片段</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <h2 class="text-sm font-semibold text-zinc-800">如何接入</h2>
+            <span class="text-xs text-zinc-500">给 AI Agent / 脚本</span>
+          </div>
+          <div class="bg-zinc-50/80 rounded-lg border border-zinc-200/80 p-3 text-xs text-zinc-600 leading-relaxed space-y-1">
+            <p>1. 打开 Swagger 文档，可直接把 OpenAPI 规范注册为 AI 的 Tool / Skill。</p>
+            <p>2. 复制 MCP 配置片段，粘贴到 Claude Code、Cursor 等客户端的 MCP 配置中。</p>
+            <p>3. 外部程序与界面共享同一组服务单例，无需重复连接硬件。</p>
+            <p>4. 变量白名单与写保护策略在「Skill 网关」页面统一维护。</p>
+          </div>
+        </div>
+      </div>
+
+      <div data-tabpane="about" class="hidden space-y-4">
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <h2 class="text-sm font-semibold text-zinc-800">J-Link 驱动</h2>
+            <span class="text-xs text-zinc-500">JLink_x64.dll</span>
+          </div>
+          <div class="bg-zinc-50/80 rounded-lg border border-zinc-200/80 p-3 space-y-2">
+            <p class="text-xs font-mono text-zinc-600">SEGGER J-Link V9.48 · D:\Program Files\SEGGER\JLink_V948\JLink_x64.dll</p>
+            <button class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-700 shadow-sm">选择 J-Link 驱动目录…</button>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <h2 class="text-sm font-semibold text-zinc-800">关于 JLinkStudio Pro</h2>
+            <span class="text-xs text-zinc-500">v1.0.0</span>
+          </div>
+          <div class="bg-zinc-50/80 rounded-lg border border-zinc-200/80 p-3 text-xs text-zinc-600 leading-relaxed">
+            <p>J-Link 智能调试上位机</p>
+            <p>· RTT 极速终端 · 变量监控与波形 · SVD 寄存器视图</p>
+            <p>· 内嵌 Skill 网关（REST + WebSocket + Swagger）</p>
+            <p class="mt-2 font-mono text-zinc-500">.NET 8 · WinForms · ScottPlot 5</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</template>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+/* ── 全局数据层：通信、采集、连接状态不放在子界面里 ── */
+const store = {
+  connected: false,
+  mode: 'debug',
+  rttRunning: false,
+  channel: 0,
+  level: 'all',
+  varView: 'table',
+  sampleRate: 200,
+  rttLines: 0,
+  buffered: 0,
+  lastUpdate: null,
+  history: {
+    actual: Array.from({ length: 160 }, (_, i) => 1200 + Math.sin(i / 9) * 160 + Math.random() * 24),
+    target: Array.from({ length: 160 }, (_, i) => 1250 + Math.sin(i / 13) * 90),
+    kp: Array.from({ length: 160 }, (_, i) => 2.6 + Math.sin(i / 21) * 0.35),
+  },
+  vars: [
+    { name: 'g_motorPid', lvl: 0, addr: '0x20001A40', type: 'struct PID', value: '—', color: '#3b82f6', open: true },
+    { name: 'kp', lvl: 1, addr: '0x20001A40', type: 'float', value: '—', color: '#3b82f6' },
+    { name: 'ki', lvl: 1, addr: '0x20001A44', type: 'float', value: '—', color: '#3b82f6' },
+    { name: 'kd', lvl: 1, addr: '0x20001A48', type: 'float', value: '—', color: '#3b82f6' },
+    { name: 'g_actualSpeed', lvl: 0, addr: '0x20001A10', type: 'int32', value: '—', color: '#16a34a' },
+    { name: 'g_targetSpeed', lvl: 0, addr: '0x20001A14', type: 'int32', value: '—', color: '#b45309' },
+  ],
+};
+
+const fmt = (v) => (v === null || v === undefined ? '—' : v);
+
+/* 顶栏与状态栏由全局脚本维护 */
+function syncChrome() {
+  $('connDot').className = 'w-2 h-2 rounded-full ' + (store.connected ? 'bg-emerald-500' : 'bg-zinc-400');
+  $('connText').textContent = store.connected ? '已连接' : '未连接';
+  $('connSub').textContent = store.connected ? 'J-Link SN 607000317 · STM32F407VG' : '未连接（演示数据）';
+  $('btnReset').disabled = !store.connected;
+  $('btnDisconnect').disabled = !store.connected;
+  $('modeText').textContent = store.mode === 'debug' ? '调试' : '查看';
+  $('stHint').textContent = store.mode === 'debug'
+    ? '调试模式：可读写变量与寄存器'
+    : '查看模式：写入与指令下发已拦截';
+  $('stRate').textContent = store.sampleRate;
+  $('stRtt').textContent = store.rttRunning ? store.rttLines + ' 行' : '—';
+  $('stBuf').textContent = store.buffered ? store.buffered + ' 行' : '—';
+  $('stTime').textContent = store.lastUpdate
+    ? new Date(store.lastUpdate).toTimeString().slice(0, 8) + '.' +
+      String(new Date(store.lastUpdate).getMilliseconds()).padStart(3, '0')
+    : '--:--:--.---';
+  $('stSource').textContent = store.connected ? '实时数据' : '演示数据';
+  $('stSource').className = 'ml-auto px-2 py-0.5 rounded-full border font-sans ' +
+    (store.connected ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700');
+}
+
+setInterval(() => { $('clock').textContent = new Date().toTimeString().slice(0, 8); }, 1000);
+
+$('btnConnect').onclick = () => {
+  store.connected = !store.connected;
+  if (!store.connected) { store.rttRunning = false; }
+  syncChrome();
+  refreshActivePage();
+};
+$('btnDisconnect').onclick = () => { store.connected = false; store.rttRunning = false; syncChrome(); refreshActivePage(); };
+
+/* 模式组：只切换模式，不销毁子界面 */
+document.querySelectorAll('[data-mode]').forEach((el) => {
+  el.onclick = (e) => {
+    e.preventDefault();
+    store.mode = el.dataset.mode;
+    document.querySelectorAll('[data-mode]').forEach((m) => {
+      const on = m.dataset.mode === store.mode;
+      m.className = 'relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-150 md:justify-center lg:justify-start ' +
+        (on ? 'font-semibold text-blue-700 bg-blue-50' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900');
+      m.querySelector('[data-mode-line]').classList.toggle('hidden', !on);
+    });
+    syncChrome();
+  };
+});
+
+/* ── 子界面定义：mount 渲染 + 启动定时器，destroy 全部清理 ── */
+const pages = {
+
+  /* RTT 终端 */
+  rtt: {
+    tpl: 'tpl-rtt',
+    mount(root) {
+      this.root = root;
+      this.out = root.querySelector('#rttOut');
+      this.count = root.querySelector('#rttCount');
+      this.pill = root.querySelector('#rttPill');
+      this.paused = false;
+
+      const setSeg = (group, attr, value) => root.querySelectorAll(`[data-group="${group}"] [${attr}]`).forEach((b) => {
+        const on = b.getAttribute(attr) === String(value);
+        b.className = 'px-3 py-1 text-xs rounded-md transition-all duration-150 ' +
+          (on ? 'font-medium bg-blue-50 text-blue-700 border border-blue-200' : 'text-zinc-600 border border-transparent hover:bg-white');
+      });
+
+      setSeg('channel', 'data-ch', store.channel);
+      setSeg('level', 'data-lv', store.level);
+
+      root.querySelectorAll('[data-ch]').forEach((b) => {
+        b.onclick = () => { store.channel = +b.dataset.ch; setSeg('channel', 'data-ch', store.channel); this.out.textContent = ''; this.print('切换到通道 Ch' + store.channel, 'text-zinc-500'); };
+      });
+      root.querySelectorAll('[data-lv]').forEach((b) => {
+        b.onclick = () => { store.level = b.dataset.lv; setSeg('level', 'data-lv', store.level); };
+      });
+
+      const start = root.querySelector('#rttStart');
+      const stop = root.querySelector('#rttStop');
+      this.syncButtons = () => {
+        start.disabled = !store.connected || store.rttRunning;
+        stop.disabled = !store.rttRunning;
+        this.pill.textContent = store.rttRunning ? '采集中 · 控制块 0x20001AB0' : '采集未启动';
+        this.pill.className = 'px-2 py-0.5 text-[11px] rounded-full border ' +
+          (store.rttRunning ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-zinc-200 bg-zinc-50 text-zinc-500');
+      };
+      start.onclick = () => {
+        store.rttRunning = true;
+        this.syncButtons();
+        this.print('RTT 采集已启动。', 'text-emerald-400');
+      };
+      stop.onclick = () => { store.rttRunning = false; this.syncButtons(); this.print('RTT 采集已停止。', 'text-amber-400'); };
+
+      root.querySelector('#rttPause').onchange = (e) => { this.paused = e.target.checked; };
+      root.querySelector('#rttClear').onclick = () => { this.out.textContent = ''; store.rttLines = 0; this.count.textContent = '0 行'; syncChrome(); };
+
+      root.querySelector('#rttSend').onkeydown = (e) => {
+        if (e.key !== 'Enter' || !e.target.value.trim()) return;
+        this.print('>> ' + e.target.value, 'text-blue-400');
+        e.target.value = '';
+      };
+
+      this.syncButtons();
+      this.print('JLinkStudio Pro · RTT 终端已就绪。', 'text-zinc-500');
+      this.timer = setInterval(() => {
+        if (!store.connected || !store.rttRunning) return;
+        this.demoLine();
+      }, 650);
+    },
+    refresh() { if (this.syncButtons) this.syncButtons(); },
+    print(text, cls) {
+      const t = new Date().toTimeString().slice(0, 8);
+      const line = document.createElement('div');
+      line.className = 'term-line ' + (cls || '');
+      line.textContent = `[${t}.${String(new Date().getMilliseconds()).padStart(3, '0')}] ${text}`;
+      this.out.appendChild(line);
+      while (this.out.childElementCount > 600) this.out.removeChild(this.out.firstElementChild);
+      store.rttLines++;
+      this.count.textContent = store.rttLines + ' 行';
+      store.buffered = Math.max(0, store.buffered + 1);
+      store.lastUpdate = Date.now();
+      syncChrome();
+      if (!this.paused) this.out.scrollTop = this.out.scrollHeight;
+    },
+    demoLine() {
+      const lines = [
+        ['[INFO] motor pid=2.61 speed=1248 target=1250 err=-2', 'text-emerald-400'],
+        ['[INFO] adc ch3=1.203V temp=36.4C', 'text-emerald-400'],
+        ['[WARN] uart1 rx fifo 78%', 'text-amber-400'],
+        ['[ERROR] can bus-off detected, retrying…', 'text-red-400'],
+      ];
+      const pick = lines[Math.floor(Math.random() * lines.length)];
+      if (store.level === 'error' && !pick[1].includes('red')) return;
+      if (store.level === 'warn' && pick[1].includes('emerald')) return;
+      if (store.level === 'info' && (pick[1].includes('red') || pick[1].includes('amber'))) return;
+      this.print(pick[0], pick[1]);
+    },
+    destroy() { clearInterval(this.timer); },
+  },
+
+  /* 变量监控与波形 */
+  vars: {
+    tpl: 'tpl-vars',
+    mount(root) {
+      this.root = root;
+      const rows = root.querySelector('#varRows');
+      const panels = { table: root.querySelector('[data-panel="table"]'), chart: root.querySelector('[data-panel="chart"]') };
+
+      const setView = (view) => {
+        store.varView = view;
+        root.querySelectorAll('[data-view]').forEach((b) => {
+          const on = b.dataset.view === view;
+          b.className = 'px-3 py-1 text-xs rounded-md transition-all duration-150 ' + (on
+            ? 'font-medium bg-blue-50 text-blue-700 border border-blue-200'
+            : 'text-zinc-600 border border-transparent hover:bg-white');
+        });
+        panels.table.classList.toggle('hidden', view !== 'table');
+        panels.chart.classList.toggle('hidden', view !== 'chart');
+        if (view === 'chart') this.draw();
+      };
+      root.querySelectorAll('[data-view]').forEach((b) => { b.onclick = () => setView(b.dataset.view); });
+
+      const render = () => {
+        rows.replaceChildren(...store.vars.map((v, i) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="text-center font-mono tabular-nums text-zinc-400">${i + 1}</td>
+            <td class="text-center"><input type="checkbox" ${v.lvl === 0 ? 'checked' : ''} class="accent-blue-600 w-4 h-4 align-middle"></td>
+            <td><span class="block w-3.5 h-3.5 mx-auto rounded-[3px]" style="background:${v.color}"></span></td>
+            <td><div class="flex items-center" style="padding-left:${v.lvl * 16}px">
+              ${v.lvl === 0 ? '<button class="w-4 shrink-0 text-[10px] text-zinc-500">' + (v.open ? '▼' : '▶') + '</button>' : '<span class="w-4 shrink-0"></span>'}
+              ${v.name}</div></td>
+            <td class="font-mono text-zinc-600 truncate">${v.addr}</td>
+            <td class="font-mono truncate" title="${v.type}">${v.type}</td>
+            <td class="font-mono tabular-nums text-right" data-val>${v.value}</td>
+            <td class="font-mono text-zinc-500">Dec</td>
+            <td class="text-center"><input type="checkbox" ${v.lvl === 0 ? '' : 'disabled'} class="accent-blue-600 w-4 h-4 align-middle"></td>`;
+          return tr;
+        }));
+      };
+      render();
+      setView(store.varView);
+
+      this.timer = setInterval(() => {
+        if (!store.connected) {
+          store.vars.forEach((v) => (v.value = '—'));
+        } else {
+          const last = (a) => a[a.length - 1];
+          store.history.actual.push(Math.max(600, last(store.history.actual) + (Math.random() - 0.5) * 90));
+          store.history.target.push(1250 + Math.sin(Date.now() / 2600) * 90);
+          store.history.kp.push(2.6 + Math.sin(Date.now() / 5000) * 0.35);
+          Object.keys(store.history).forEach((k) => { if (store.history[k].length > 160) store.history[k].shift(); });
+          store.vars[1].value = last(store.history.kp).toFixed(2);
+          store.vars[2].value = '0.12';
+          store.vars[3].value = '0.01';
+          store.vars[4].value = Math.round(last(store.history.actual));
+          store.vars[5].value = Math.round(last(store.history.target));
+          store.vars[0].value = '—';
+          store.lastUpdate = Date.now();
+          store.buffered = Math.min(999, store.buffered + 2);
+          syncChrome();
+        }
+        render();
+        if (store.varView === 'chart') this.draw();
+      }, 220);
+    },
+    draw() {
+      const canvas = this.root.querySelector('#wave');
+      if (!canvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+        canvas.width = w * dpr; canvas.height = h * dpr;
+      }
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.strokeStyle = '#e4e4e7'; ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = (h / 4) * i;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+
+      const series = [
+        { data: store.history.actual, color: '#2563eb', min: 400, max: 1800 },
+        { data: store.history.target, color: '#16a34a', min: 400, max: 1800 },
+        { data: store.history.kp, color: '#b45309', min: 1.6, max: 3.6 },
+      ];
+      series.forEach((s) => {
+        ctx.beginPath();
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 1.8;
+        s.data.forEach((v, i) => {
+          const x = (i / (s.data.length - 1)) * (w - 8) + 4;
+          const y = h - ((v - s.min) / (s.max - s.min)) * (h - 16) - 8;
+          i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+        });
+        ctx.stroke();
+      });
+    },
+    destroy() { clearInterval(this.timer); },
+  },
+
+  /* 硬件寄存器 */
+  regs: {
+    tpl: 'tpl-regs',
+    mount(root) {
+      this.root = root;
+      const periphs = ['USART1  0x40011000', 'USART2  0x40004400', 'GPIOA   0x40020000', 'GPIOB   0x40020400',
+        'TIM1    0x40010000', 'TIM2    0x40000000', 'ADC1    0x40012000', 'SPI1    0x40013000',
+        'I2C1    0x40005400', 'DMA1    0x40026000', 'RCC     0x40023800', 'EXTI    0x40013C00'];
+      const list = root.querySelector('#periphList');
+      const title = root.querySelector('#regTitle');
+      const rows = root.querySelector('#regRows');
+      const regSets = {
+        USART1: [['SR', '0x000000C0', '0x000000C0', 'read/write', '状态寄存器'],
+          ['DR', '0x00000041', '0x00000000', 'read/write', '数据寄存器'],
+          ['BRR', '0x000006D9', '0x00000000', 'read/write', '波特率寄存器'],
+          ['CR1', '0x0000200C', '0x00000000', 'read/write', '控制寄存器 1']],
+        GPIOA: [['MODER', '0xA8000000', '0xA8000000', 'read/write', '模式寄存器'],
+          ['OTYPER', '0x00000000', '0x00000000', 'read/write', '输出类型'],
+          ['ODR', '0x00000000', '0x00000000', 'read/write', '输出数据'],
+          ['IDR', '0x0000A000', '0x00000000', 'read-only', '输入数据']],
+      };
+      const fallback = [['CTRL', '0x00000000', '0x00000000', 'read/write', '控制寄存器'],
+        ['STAT', '0x00000010', '0x00000000', 'read-only', '状态寄存器'],
+        ['DATA', '0x00000000', '0x00000000', 'read/write', '数据寄存器']];
+
+      const renderRegs = (p) => {
+        title.textContent = p.split(' ')[0];
+        const set = regSets[p.split(' ')[0]] || fallback;
+        rows.replaceChildren(...set.map((r) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="font-mono">${r[0]}</td>
+            <td class="font-mono tabular-nums text-blue-700">${store.connected ? r[1] : '—'}</td>
+            <td class="font-mono tabular-nums text-zinc-500">${r[2]}</td>
+            <td class="font-mono text-zinc-600">${r[3]}</td>
+            <td class="text-zinc-500 truncate">${r[4]}</td>`;
+          return tr;
+        }));
+      };
+
+      periphs.forEach((p, i) => {
+        const b = document.createElement('button');
+        b.className = 'w-full text-left px-2.5 py-1.5 rounded-md transition-all duration-150 ' +
+          (i === 0 ? 'bg-blue-50 text-blue-700 font-medium' : 'text-zinc-600 hover:bg-zinc-100');
+        b.textContent = p;
+        b.onclick = () => {
+          list.querySelectorAll('button').forEach((x) => {
+            x.className = 'w-full text-left px-2.5 py-1.5 rounded-md text-zinc-600 hover:bg-zinc-100 transition-all duration-150';
+          });
+          b.className = 'w-full text-left px-2.5 py-1.5 rounded-md bg-blue-50 text-blue-700 font-medium transition-all duration-150';
+          renderRegs(p);
+        };
+        list.appendChild(b);
+      });
+      renderRegs(periphs[0]);
+
+      this.renderRegs = renderRegs;
+      this.timer = setInterval(() => {
+        if (!store.connected) return;
+        store.lastUpdate = Date.now();
+        syncChrome();
+      }, 900);
+    },
+    destroy() { clearInterval(this.timer); },
+  },
+
+  /* 运行日志 */
+  log: {
+    tpl: 'tpl-log',
+    mount(root) {
+      this.rows = root.querySelector('#logRows');
+      const samples = [
+        ['system', 'INFO', 'Skill 网关已启动：http://127.0.0.1:5080'],
+        ['device', 'INFO', 'J-Link 连接成功 · SN 607000317 · STM32F407VG SWD 4000kHz'],
+        ['symbol', 'INFO', 'ELF 已加载：app.elf，符号 1284 个'],
+        ['skill', 'AUDIT', 'GET /api/v1/variables/read 200 · 3.2ms'],
+        ['device', 'WARN', 'RTT 控制块未找到，回退到全内存扫描'],
+        ['skill', 'AUDIT', 'POST /api/v1/variables/write 403 · 写保护已启用'],
+      ];
+      const add = (s) => {
+        const t = new Date().toTimeString().slice(0, 8);
+        const tr = document.createElement('tr');
+        const color = s[1] === 'WARN' ? 'text-amber-600' : s[1] === 'AUDIT' ? 'text-blue-600' : 'text-zinc-600';
+        tr.innerHTML = `<td class="font-mono tabular-nums text-zinc-500">${t}</td>
+          <td class="font-mono">${s[0]}</td>
+          <td class="${color} font-mono">${s[1]}</td>
+          <td class="truncate">${s[2]}</td>`;
+        this.rows.appendChild(tr);
+        while (this.rows.childElementCount > 300) this.rows.removeChild(this.rows.firstElementChild);
+      };
+      samples.forEach(add);
+      this.timer = setInterval(() => {
+        add(samples[Math.floor(Math.random() * samples.length)]);
+        store.lastUpdate = Date.now();
+        syncChrome();
+      }, 1400);
+    },
+    destroy() { clearInterval(this.timer); },
+  },
+
+  /* Skill 网关 */
+  skill: {
+    tpl: 'tpl-skill',
+    mount(root) {
+      this.rows = root.querySelector('#auditRows');
+      const calls = [
+        ['ai-agent', 'POST', '/api/v1/variables/read'],
+        ['cursor', 'GET', '/api/v1/registers/fault-snapshot'],
+        ['script', 'POST', '/api/v1/variables/write'],
+        ['claude', 'GET', '/api/v1/rtt/lines'],
+      ];
+      const add = (c) => {
+        const t = new Date().toTimeString().slice(0, 8);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="font-mono tabular-nums text-zinc-500">${t}</td>
+          <td class="font-mono">${c[0]}</td>
+          <td class="font-mono ${c[1] === 'POST' ? 'text-blue-600' : 'text-emerald-600'}">${c[1]}</td>
+          <td class="font-mono truncate">${c[2]}</td>`;
+        this.rows.appendChild(tr);
+        while (this.rows.childElementCount > 40) this.rows.removeChild(this.rows.firstElementChild);
+      };
+      calls.slice(0, 3).forEach(add);
+      this.timer = setInterval(() => add(calls[Math.floor(Math.random() * calls.length)]), 2100);
+    },
+    destroy() { clearInterval(this.timer); },
+  },
+
+  /* 设置 */
+  settings: {
+    tpl: 'tpl-settings',
+    mount(root) {
+      const panes = root.querySelectorAll('[data-tabpane]');
+      root.querySelectorAll('[data-tab]').forEach((b) => {
+        b.onclick = () => {
+          root.querySelectorAll('[data-tab]').forEach((x) => {
+            const on = x === b;
+            x.className = 'px-3 py-1.5 text-xs rounded-md transition-all duration-150 ' + (on
+              ? 'font-medium bg-blue-50 text-blue-700 border border-blue-200'
+              : 'border border-transparent text-zinc-600 hover:bg-zinc-100');
+          });
+          panes.forEach((p) => p.classList.toggle('hidden', p.dataset.tabpane !== b.dataset.tab));
+        };
+      });
+    },
+    destroy() {},
+  },
+};
+
+/* ── 切换：销毁当前 → 挂载目标 → 同步导航 / hash / 抽屉 ── */
+const navs = [...document.querySelectorAll('[data-nav]')];
+const root = $('page-root');
+let current = null;
+let activePage = null;
+
+function refreshActivePage() {
+  if (activePage && pages[activePage].refresh) pages[activePage].refresh();
+}
+
+function applyNavStyles(id) {
+  navs.forEach((n) => {
+    const on = n.dataset.nav === id;
+    n.className = 'group relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-150 md:justify-center lg:justify-start ' +
+      (on ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900');
+    n.querySelector('[data-line]').classList.toggle('hidden', !on);
+  });
+}
+
+function showPage(id) {
+  if (!pages[id]) return;
+  if (current) pages[current].destroy();
+  root.replaceChildren(document.getElementById(pages[id].tpl).content.cloneNode(true));
+  pages[id].mount(root);
+  current = id;
+  activePage = id;
+  applyNavStyles(id);
+  history.replaceState(null, '', '#' + id);
+  toggleDrawer(false);
+  syncChrome();
+}
+
+const sidebar = $('sidebar'), overlay = $('overlay');
+function toggleDrawer(open) {
+  sidebar.classList.toggle('-translate-x-full', !open);
+  overlay.classList.toggle('hidden', !open);
+}
+$('menuBtn').onclick = () => toggleDrawer(true);
+overlay.onclick = () => toggleDrawer(false);
+
+navs.forEach((n) => { n.onclick = (e) => { e.preventDefault(); showPage(n.dataset.nav); }; });
+
+const initial = location.hash.slice(1);
+showPage(pages[initial] ? initial : 'rtt');
+syncChrome();
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\JLinkStudio.Core\JLinkStudio.Core.csproj" />
+    <ProjectReference Include="..\JLinkStudio.SkillGateway\JLinkStudio.SkillGateway.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ScottPlot.WinForms" Version="5.0.55" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 同时作为资源嵌入，供窗体标题栏 / 任务栏显式使用 -->
+    <EmbeddedResource Include="Assets\app.ico" LogicalName="JLinkStudio.app.ico" />
+  </ItemGroup>
+
+</Project>

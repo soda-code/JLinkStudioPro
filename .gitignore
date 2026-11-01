@@ -1,0 +1,24 @@
+# 构建输出
+bin/
+obj/
+publish/
+artifacts/
+
+# 发布包
+*.zip
+*.nupkg
+
+# IDE / 本地配置
+.vs/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+# CodeBuddy 本地数据（含本机路径与会话记录，不入库）
+.codebuddy/
+
+# 系统
+Thumbs.db
+desktop.ini
+.DS_Store

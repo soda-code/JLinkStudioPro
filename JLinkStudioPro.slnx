@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/JLinkStudio.Core/JLinkStudio.Core.csproj" />
+    <Project Path="src/JLinkStudio.SkillGateway/JLinkStudio.SkillGateway.csproj" />
+    <Project Path="src/JLinkStudio.WinFormsUI/JLinkStudio.WinFormsUI.csproj" />
+  </Folder>
+</Solution>
