@@ -23,7 +23,7 @@ public sealed class PageMemoryView : UserControl, ISubPageView
     private readonly AppHost _host;
     private readonly RoundedSelect _cboRegion = Ui.Combo("RAM", "内部 Flash", "外部 Flash", "自定义");
     private readonly RoundedTextBox _txtAddress = Ui.Input("0x20000000", 150);
-    private readonly RoundedTextBox _txtLength = Ui.Input("0x100", 110);
+    private readonly RoundedSelect _cboLength = Ui.Combo("0x40", "0x100", "0x200", "0x400", "0x1000", "0x4000", "0x10000");
     private readonly FlatCheckBox _chkAuto = Ui.Check("自动刷新", false);
     private readonly RoundedSelect _cboInterval = Ui.Combo("500 ms", "1 s", "2 s");
     private readonly RichTextBox _txtHex = new();
@@ -48,6 +48,16 @@ public sealed class PageMemoryView : UserControl, ISubPageView
         Padding = new Padding(16, 4, 16, 12);
 
         Controls.Add(BuildLayout());
+
+        // 长度：预置常用块大小，也允许直接输入任意字节数（0x 十六进制或十进制）
+        _cboLength.Editable = true;
+        _cboLength.Text = "0x100";
+        _cboLength.EditorKeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Enter) return;
+            e.SuppressKeyPress = true;
+            _ = ReadAsync();
+        };
 
         Ctx.Device.StateChanged += (_, _) => SafeInvoke(RefreshConnectionHint);
         _cboRegion.SelectedIndexChanged += (_, _) => SafeInvoke(ApplyRegionPreset);
@@ -91,8 +101,9 @@ public sealed class PageMemoryView : UserControl, ISubPageView
         rowRegion.Controls.Add(Ui.Text("起始地址", true));
         rowRegion.Controls.Add(_txtAddress);
         rowRegion.Controls.Add(Ui.Text("长度", true));
-        rowRegion.Controls.Add(_txtLength);
-        rowRegion.Controls.Add(Ui.Text("字节（支持 0x 十六进制）", false, DarkGeekTheme.TextMuted, 8.5f));
+        _cboLength.Width = 110;
+        rowRegion.Controls.Add(_cboLength);
+        rowRegion.Controls.Add(Ui.Text("字节（下拉选或直接填，支持 0x）", false, DarkGeekTheme.TextMuted, 8.5f));
 
         // 区域说明行
         var rowHint = Ui.Row(0, 6);
@@ -200,9 +211,9 @@ public sealed class PageMemoryView : UserControl, ISubPageView
             return;
         }
 
-        if (!TryParseNumber(_txtLength.Text, out uint length) || length == 0)
+        if (!TryParseNumber(_cboLength.Text, out uint length) || length == 0)
         {
-            Report($"长度无法识别：{_txtLength.Text.Trim()}", DarkGeekTheme.Danger);
+            Report($"长度无法识别：{_cboLength.Text.Trim()}", DarkGeekTheme.Danger);
             return;
         }
 

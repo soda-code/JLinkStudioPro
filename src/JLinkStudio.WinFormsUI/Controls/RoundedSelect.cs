@@ -35,6 +35,7 @@ public sealed class RoundedSelect : Control
         _editor.ForeColor = DarkGeekTheme.TextPrimary;
         _editor.Font = DarkGeekTheme.UiFont;
         _editor.Visible = false;
+        _editor.KeyDown += (_, e) => EditorKeyDown?.Invoke(this, e);
         Controls.Add(_editor);
 
         KeyDown += (_, e) =>
@@ -71,6 +72,9 @@ public sealed class RoundedSelect : Control
     }
 
     public void FocusInput() => _editor.Focus();
+
+    /// <summary>内嵌输入框的按键事件：Editable 模式下可用来做「回车即执行」。</summary>
+    public event KeyEventHandler? EditorKeyDown;
 
     private void LayoutEditor()
     {
