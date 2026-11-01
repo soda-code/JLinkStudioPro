@@ -203,7 +203,8 @@ public sealed class SessionController : ControllerBase
             captureSampleRateHz = new { min = 1, max = 1000 },
             captureDurationMs = new { min = 10, max = 600000 },
             batchIntervalMs = new { min = 0, max = 60000 },
-            memoryReadBytes = new { min = 1, max = 4096 },
+            memoryReadBytes = new { min = 1, max = 65536 },
+            memoryWriteBytes = new { min = 1, max = 65536 },
             promptTimeoutMs = new { min = 1000, max = 300000 },
         },
     };

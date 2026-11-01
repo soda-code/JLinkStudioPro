@@ -53,7 +53,10 @@ Invoke-RestMethod http://127.0.0.1:5080/api/v1/session/status
 | GET | `/api/v1/session/devices` | 已连接的 J-Link 列表与 SN |
 | GET | `/api/v1/data/snapshot` | 全量状态快照 |
 | GET | `/api/v1/data/registers` | 寄存器快照 |
-| GET | `/api/v1/data/memory?address=0x20000000&length=64` | 读内存，返回 HEX |
+| GET | `/api/v1/data/memory?address=0x20000000&length=64` | 读内存，返回 HEX / u8 / u16 / u32 / f32，最多 64 KiB |
+| GET | `/api/v1/data/memory?region=ram&length=64` | 按区域名读：`ram`(0x20000000) / `flash`(0x08000000) / `extflash`(0x90000000) |
+| GET | `/api/v1/data/memory/regions` | 区域预置表与单次字节上限 |
+| POST | `/api/v1/data/memory` | 写内存：`{"address":"0x20000000","hex":"DEADBEEF","verify":true}` 或 `{"address":..,"bytes":[1,2,255]}`；受查看模式/写保护约束 |
 | GET | `/api/v1/variables/search?query=` / `/all` | 符号检索 / 全部符号 |
 | POST | `/api/v1/variables/read` / `write` / `write-batch` | 变量读写（批量用 `items:[{name,value}]`） |
 | POST | `/api/v1/variables/watch` | `{"names":[...],"items":[{name,format,color,plotEnabled,enabled,isWritable,exposeToSkill,refreshRateHz}]}` |

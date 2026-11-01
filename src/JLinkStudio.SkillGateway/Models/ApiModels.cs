@@ -116,6 +116,22 @@ public sealed class FieldWriteRequest
     public ulong Value { get; set; }
 }
 
+/// <summary>按地址写内存：hex 与 bytes 二选一，verify=true 时写后回读校验。</summary>
+public sealed class MemoryWriteRequest
+{
+    /// <summary>起始地址，支持 "0x20000000" 或十进制。</summary>
+    public string Address { get; set; } = string.Empty;
+
+    /// <summary>十六进制字节串，如 "0102FEFF"；空格、逗号、0x 前缀会被忽略。</summary>
+    public string? Hex { get; set; }
+
+    /// <summary>字节数组，如 [1,2,254,255]（0~255）。</summary>
+    public List<int>? Bytes { get; set; }
+
+    /// <summary>写后回读校验，默认开启。</summary>
+    public bool Verify { get; set; } = true;
+}
+
 public sealed class RttSendRequest
 {
     public string Text { get; set; } = string.Empty;
