@@ -65,21 +65,23 @@ public sealed class RegisterInfoDialog : Form
         if (!string.IsNullOrEmpty(register.ReadAction))
             description += $"\r\n读取副作用：{register.ReadAction}（读取该寄存器可能清除或改变其值）";
 
+        // 说明只占两行高度，长文本靠滚动查看，把空间留给位域明细
         var descBox = new RichTextBox
         {
             Location = new Point(PadLeft, 190),
-            Size = new Size(ContentWidth, 84),
+            Size = new Size(ContentWidth, 44),
             BackColor = DarkGeekTheme.InputBack,
             ForeColor = DarkGeekTheme.TextPrimary,
             BorderStyle = BorderStyle.None,
             Font = DarkGeekTheme.UiFont,
             ReadOnly = true,
+            ScrollBars = RichTextBoxScrollBars.Vertical,
             Text = description,
         };
         var descFrame = new RoundedFrame
         {
             Location = new Point(PadLeft, 190),
-            Size = new Size(ContentWidth, 84),
+            Size = new Size(ContentWidth, 44),
             BackColor = DarkGeekTheme.InputBack,
             BorderColor = DarkGeekTheme.GridLineSoft,
             Radius = 6,
@@ -90,7 +92,7 @@ public sealed class RegisterInfoDialog : Form
 
         // ── 位域明细 ──
         var fieldLabel = Ui.Text($"位域明细（{register.Fields.Count} 个）", true, DarkGeekTheme.TextSecondary, 9f);
-        fieldLabel.Location = new Point(PadLeft, 286);
+        fieldLabel.Location = new Point(PadLeft, 244);
 
         var grid = new DataGridView { Dock = DockStyle.Fill };
         DarkGeekTheme.StyleGridExcel(grid, readOnly: true);
@@ -120,8 +122,8 @@ public sealed class RegisterInfoDialog : Form
 
         var gridFrame = new RoundedFrame
         {
-            Location = new Point(PadLeft, 308),
-            Size = new Size(ContentWidth, 196),
+            Location = new Point(PadLeft, 244 + 22),
+            Size = new Size(ContentWidth, 238),
             BackColor = DarkGeekTheme.InputBack,
             BorderColor = DarkGeekTheme.GridLineSoft,
             Radius = 6,
