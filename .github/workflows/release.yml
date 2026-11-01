@@ -1,0 +1,45 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: 发布（单文件 win-x64）
+        run: >
+          dotnet publish src/JLinkStudio.WinFormsUI/JLinkStudio.WinFormsUI.csproj
+          -c Release -r win-x64 --self-contained false
+          -p:PublishSingleFile=true -o dist/app
+
+      - name: 打包
+        shell: pwsh
+        run: |
+          Get-ChildItem dist/app -Filter *.pdb -ErrorAction SilentlyContinue | Remove-Item -Force
+          $tag = '${{ github.ref_name }}'
+          Compress-Archive -Path (Get-ChildItem dist/app).FullName `
+            -DestinationPath "dist/JLinkStudioPro-$tag-win-x64.zip" -Force
+          Compress-Archive -Path skill/jlink-studio-pro/* `
+            -DestinationPath "dist/jlink-studio-pro-skill-$tag.zip" -Force
+          Get-ChildItem dist -Filter *.zip | Select-Object Name, Length
+
+      - name: 创建 Release 并上传附件
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/JLinkStudioPro-*-win-x64.zip
+            dist/jlink-studio-pro-skill-*.zip
+          generate_release_notes: true
+          draft: false
