@@ -5,8 +5,10 @@ publish/
 artifacts/
 
 # 发布包
+dist/
 *.zip
 *.nupkg
+*.pdb
 
 # IDE / 本地配置
 .vs/
