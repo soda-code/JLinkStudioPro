@@ -352,11 +352,6 @@ public sealed class PageRttView : UserControl, ISubPageView
 
         row.Controls.Add(Ui.Button("发送", ButtonKind.Primary, (_, _) => SendCommand(), 72));
 
-        row.Controls.Add(Ui.Text("快捷宏：", false, DarkGeekTheme.TextMuted, 8.75f));
-        row.Controls.Add(Ui.Button("软复位", ButtonKind.Ghost, (_, _) => QuickSend("reboot"), 72));
-        row.Controls.Add(Ui.Button("触发故障", ButtonKind.Ghost, (_, _) => QuickSend("fault"), 84));
-        row.Controls.Add(Ui.Button("转速=1000", ButtonKind.Ghost, (_, _) => QuickSend("set_target=1000"), 92));
-
         _pillState.SetState("采集未启动", DarkGeekTheme.TextMuted);
         _pillState.Margin = new Padding(10, 2, 0, 0);
         row.Controls.Add(_pillState);
@@ -374,14 +369,6 @@ public sealed class PageRttView : UserControl, ISubPageView
         bool ok = _chkHex.Checked ? Ctx.Rtt.SendHex(text, _channel) : Ctx.Rtt.Send(text, _channel);
         AppendSystemLine(ok ? $">>> {text}" : "发送失败：目标未连接。");
         if (ok) _sendBox.Text = string.Empty;
-    }
-
-    private void QuickSend(string text)
-    {
-        if (BlockedByInspectMode()) return;
-
-        bool ok = Ctx.Rtt.Send(text, _channel);
-        AppendSystemLine(ok ? $">>> {text}" : "发送失败：目标未连接。");
     }
 
     /// <summary>查看模式下拦截向目标板下发指令，避免误操作改变现场。</summary>
