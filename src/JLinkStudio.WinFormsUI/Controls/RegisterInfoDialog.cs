@@ -1,28 +1,42 @@
+using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using JLinkStudio.Core.Models;
 using JLinkStudio.WinFormsUI.Theme;
 
 namespace JLinkStudio.WinFormsUI.Controls;
 
 /// <summary>
-/// 寄存器说明弹窗：双击硬件寄存器时展示外设 / 地址 / 宽度 / 复位值 / 权限 / 描述与位域明细。
-/// 数据全部来自已加载的 SVD 描述文件。
+/// 寄存器说明弹窗：双击硬件寄存器时展示位域明细。
+/// 无边框圆角窗口 + 自绘标题栏（可拖动，Esc / 右上角 ✕ 关闭），
+/// 只保留位域明细，避免上方堆叠大量文字把表格挤小。
 /// </summary>
 public sealed class RegisterInfoDialog : Form
 {
     private const int PadLeft = 18;
     private const int ContentWidth = 664;
+    private const int CornerRadius = 10;
+    private const int WmNcLButtonDown = 0xA1;
+    private const int HtCaption = 2;
+    private const int CsDropShadow = 0x20000;
+
+    private Region? _roundedRegion;
+
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
 
     public RegisterInfoDialog(SvdPeripheral peripheral, SvdRegister register)
     {
         Text = $"寄存器说明 - {register.Name}";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
+        FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterParent;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        ClientSize = new Size(700, 580);
+        ClientSize = new Size(700, 480);
         BackColor = DarkGeekTheme.PageBack;
         ForeColor = DarkGeekTheme.TextPrimary;
         Font = DarkGeekTheme.UiFont;
+        DoubleBuffered = true;
 
         string titleText = string.IsNullOrWhiteSpace(register.DisplayName)
             ? register.Name
@@ -30,69 +44,38 @@ public sealed class RegisterInfoDialog : Form
         var title = Ui.Text(titleText, true, DarkGeekTheme.TextPrimary, 11f);
         title.Location = new Point(PadLeft, 14);
 
-        var subtitle = Ui.Text($"{peripheral.Name} · {peripheral.Description ?? peripheral.GroupName ?? "外设"}",
+        // 外设 / 地址 / 位宽 / 权限 / 复位值压成一行副标题，不再单独占一块信息区
+        var subtitle = Ui.Text(
+            $"{peripheral.Name} · {register.AddressText} · {register.SizeBits} 位 · {register.Access} · 复位 0x{register.ResetValue:X8}",
             false, DarkGeekTheme.TextMuted, 8.75f);
         subtitle.Location = new Point(PadLeft, 40);
 
         var hairline = new Panel
         {
-            Location = new Point(PadLeft, 66),
+            Location = new Point(PadLeft, 70),
             Size = new Size(ContentWidth, 1),
             BackColor = DarkGeekTheme.Border,
         };
 
-        // ── 基本信息 ──
-        var info = new Panel
+        // 右上角关闭
+        var closeIcon = new Label
         {
-            Location = new Point(PadLeft, 76),
-            Size = new Size(ContentWidth, 84),
+            Text = "✕",
+            Location = new Point(ClientSize.Width - PadLeft - 24, 12),
+            Size = new Size(24, 24),
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = DarkGeekTheme.TextMuted,
             BackColor = Color.Transparent,
-        };
-        AddInfo(info, "外设", peripheral.Name, 0, 0);
-        AddInfo(info, "地址", register.AddressText, 340, 0);
-        AddInfo(info, "偏移", $"0x{register.Offset:X}", 0, 28);
-        AddInfo(info, "宽度", $"{register.SizeBits} 位", 340, 28);
-        AddInfo(info, "复位值", $"0x{register.ResetValue:X8}", 0, 56);
-        AddInfo(info, "权限", register.Access, 340, 56);
-
-        // ── 说明 ──
-        var descLabel = Ui.Text("说明", true, DarkGeekTheme.TextSecondary, 9f);
-        descLabel.Location = new Point(PadLeft, 168);
-
-        string description = string.IsNullOrWhiteSpace(register.Description)
-            ? "（SVD 中未提供该寄存器的文字说明）"
-            : register.Description!;
-        if (!string.IsNullOrEmpty(register.ReadAction))
-            description += $"\r\n读取副作用：{register.ReadAction}（读取该寄存器可能清除或改变其值）";
-
-        // 说明只占两行高度，长文本靠滚动查看，把空间留给位域明细
-        var descBox = new RichTextBox
-        {
-            Location = new Point(PadLeft, 190),
-            Size = new Size(ContentWidth, 44),
-            BackColor = DarkGeekTheme.InputBack,
-            ForeColor = DarkGeekTheme.TextPrimary,
-            BorderStyle = BorderStyle.None,
+            Cursor = Cursors.Hand,
             Font = DarkGeekTheme.UiFont,
-            ReadOnly = true,
-            ScrollBars = RichTextBoxScrollBars.Vertical,
-            Text = description,
         };
-        var descFrame = new RoundedFrame
-        {
-            Location = new Point(PadLeft, 190),
-            Size = new Size(ContentWidth, 44),
-            BackColor = DarkGeekTheme.InputBack,
-            BorderColor = DarkGeekTheme.GridLineSoft,
-            Radius = 6,
-            Padding = new Padding(8, 6, 8, 6),
-        };
-        descFrame.Controls.Add(descBox);
-        descBox.Dock = DockStyle.Fill;
+        closeIcon.Click += (_, _) => Close();
+        closeIcon.MouseEnter += (_, _) => closeIcon.ForeColor = DarkGeekTheme.Danger;
+        closeIcon.MouseLeave += (_, _) => closeIcon.ForeColor = DarkGeekTheme.TextMuted;
 
-        // ── 位域明细 ──
+        // ── 位域明细（唯一主体） ──
         var fieldLabel = Ui.Text($"位域明细（{register.Fields.Count} 个）", true, DarkGeekTheme.TextSecondary, 9f);
-        fieldLabel.Location = new Point(PadLeft, 244);
+        fieldLabel.Location = new Point(PadLeft, 86);
 
         var grid = new DataGridView { Dock = DockStyle.Fill };
         DarkGeekTheme.StyleGridExcel(grid, readOnly: true);
@@ -122,8 +105,8 @@ public sealed class RegisterInfoDialog : Form
 
         var gridFrame = new RoundedFrame
         {
-            Location = new Point(PadLeft, 244 + 22),
-            Size = new Size(ContentWidth, 238),
+            Location = new Point(PadLeft, 110),
+            Size = new Size(ContentWidth, 300),
             BackColor = DarkGeekTheme.InputBack,
             BorderColor = DarkGeekTheme.GridLineSoft,
             Radius = 6,
@@ -132,14 +115,18 @@ public sealed class RegisterInfoDialog : Form
         gridFrame.Controls.Add(grid);
 
         var close = Ui.Button("关闭", ButtonKind.Primary, (_, _) => Close(), 96);
-        close.Location = new Point(700 - PadLeft - 96, 522);
+        close.Location = new Point(ClientSize.Width - PadLeft - 96, 426);
 
         Controls.AddRange(new Control[]
         {
-            title, subtitle, hairline, info,
-            descLabel, descFrame,
+            title, subtitle, hairline, closeIcon,
             fieldLabel, gridFrame, close,
         });
+
+        // 无边框窗口：标题区拖动
+        MouseDown += DragWindow;
+        title.MouseDown += DragWindow;
+        subtitle.MouseDown += DragWindow;
 
         KeyPreview = true;
         KeyDown += (_, e) =>
@@ -148,28 +135,55 @@ public sealed class RegisterInfoDialog : Form
         };
     }
 
-    private static void AddInfo(Panel host, string label, string value, int x, int y)
+    protected override CreateParams CreateParams
     {
-        host.Controls.Add(new Label
+        get
         {
-            Text = label,
-            Location = new Point(x, y),
-            Size = new Size(48, 24),
-            TextAlign = ContentAlignment.MiddleLeft,
-            ForeColor = DarkGeekTheme.TextMuted,
-            BackColor = Color.Transparent,
-            Font = DarkGeekTheme.UiFontSmall,
-        });
+            var cp = base.CreateParams;
+            cp.ClassStyle |= CsDropShadow;
+            return cp;
+        }
+    }
 
-        host.Controls.Add(new Label
-        {
-            Text = value,
-            Location = new Point(x + 48, y),
-            Size = new Size(284, 24),
-            TextAlign = ContentAlignment.MiddleLeft,
-            ForeColor = DarkGeekTheme.TextPrimary,
-            BackColor = Color.Transparent,
-            Font = DarkGeekTheme.MonoFont,
-        });
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        ApplyRoundedRegion();
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        ApplyRoundedRegion();
+    }
+
+    /// <summary>把窗口外形裁成圆角，去掉直角边框。</summary>
+    private void ApplyRoundedRegion()
+    {
+        if (!IsHandleCreated || Width <= 0 || Height <= 0) return;
+
+        using var path = DarkGeekTheme.RoundedRect(new Rectangle(0, 0, Width, Height), CornerRadius);
+        var region = new Region(path);
+        var previous = _roundedRegion;
+        _roundedRegion = region;
+        Region = region;
+        previous?.Dispose();
+    }
+
+    /// <summary>沿窗口外形描一圈细边，避免圆角处与背景糊在一起。</summary>
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using var path = DarkGeekTheme.RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), CornerRadius);
+        using var pen = new Pen(DarkGeekTheme.Border);
+        e.Graphics.DrawPath(pen, path);
+    }
+
+    private void DragWindow(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left) return;
+        ReleaseCapture();
+        SendMessage(Handle, WmNcLButtonDown, HtCaption, 0);
     }
 }
