@@ -16,6 +16,12 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Product>JLink-Studio-Pro</Product>
+    <Company>潜龙勿用</Company>
+    <!-- 与 JLinkStudio.Core.AppInfo.DisplayVersion 保持一致 -->
+    <InformationalVersion>V1.00.001.R</InformationalVersion>
+    <FileVersion>1.0.1.0</FileVersion>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>

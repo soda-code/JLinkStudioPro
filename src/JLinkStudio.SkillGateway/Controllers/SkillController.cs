@@ -1,3 +1,4 @@
+using JLinkStudio.Core;
 using JLinkStudio.Core.Models;
 using JLinkStudio.Core.Services;
 using JLinkStudio.SkillGateway.Models;
@@ -77,8 +78,9 @@ public sealed class SkillController : ControllerBase
     [HttpGet("manifest")]
     public IActionResult Manifest() => Ok(new
     {
-        name = "JLink-Studio-Pro",
-        version = "1.0.0",
+        name = AppInfo.ProductName,
+        version = AppInfo.VersionNumber,
+        displayVersion = AppInfo.DisplayVersion,
         protocol = new[] { "rest", "websocket" },
         capabilities = new[]
         {

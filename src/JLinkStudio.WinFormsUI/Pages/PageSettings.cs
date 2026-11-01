@@ -1,3 +1,4 @@
+using JLinkStudio.Core;
 using JLinkStudio.Core.Services;
 using JLinkStudio.WinFormsUI.Controls;
 using JLinkStudio.WinFormsUI.Navigation;
@@ -154,7 +155,7 @@ public sealed class PageSettings : UserControl, ISubPageView
         body.Controls.Add(rowButtons);
         driverCard.Controls.Add(body);
 
-        var aboutCard = Ui.Section("关于 JLink-Studio-Pro", "v1.0.0");
+        var aboutCard = Ui.Section("关于 JLink-Studio-Pro", AppInfo.DisplayVersion);
         aboutCard.Margin = new Padding(0, 10, 0, 0);
         var about = new Label
         {

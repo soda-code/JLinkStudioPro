@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
+using JLinkStudio.Core;
 using JLinkStudio.Core.Models;
 using JLinkStudio.Core.Services;
 using JLinkStudio.WinFormsUI.Controls;
@@ -179,7 +180,7 @@ public sealed class MainForm : Form
         BackColor = DarkGeekTheme.WindowBack;
         ForeColor = DarkGeekTheme.TextPrimary;
         Font = DarkGeekTheme.UiFont;
-        Text = "JLink-Studio-Pro";
+        Text = $"{AppInfo.ProductName}  {AppInfo.DisplayVersion}";
         Icon = LoadAppIcon();
         DoubleBuffered = true;
         // 留 2px 边：1px 给圆角描边，1px 防止内容压到裁剪边缘
