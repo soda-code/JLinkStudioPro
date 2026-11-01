@@ -427,11 +427,14 @@ public sealed class MainForm : Form
         _nav.AddItem(new NavItem { Key = "rtt", Icon = "💻", Title = "打印", Group = "调试工作台" });
         _nav.AddItem(new NavItem { Key = "watch", Icon = "👀", Title = "变量监控", Group = "调试工作台" });
         _nav.AddItem(new NavItem { Key = "svd", Icon = "⚙", Title = "寄存器", Group = "调试工作台" });
+        _nav.AddItem(new NavItem { Key = "memory", Icon = "💾", Title = "内存", Group = "调试工作台" });
         _nav.AddItem(new NavItem { Key = "download", Icon = "⬇", Title = "程序下载", Group = "调试工作台" });
         _nav.AddItem(new NavItem { Key = "log", Icon = "📋", Title = "运行日志", Group = "调试工作台" });
         _nav.AddItem(new NavItem { Key = "settings", Icon = "🛠", Title = "设置", Group = "系统" });
         _nav.UserName = string.IsNullOrWhiteSpace(Environment.UserName) ? "JLink Engineer" : Environment.UserName;
         _nav.UserRole = "嵌入式工程师";
+        // 版本号常驻侧边栏底部，任何子界面（含主页）都能看到当前构建版本
+        _nav.VersionText = AppInfo.DisplayVersion;
         _nav.ItemSelected += (_, key) => Navigate(key);
         // 左侧顶部模式组：切换调试/查看模式（不销毁当前子界面）
         _nav.ModeRequested += (_, key) =>
@@ -484,6 +487,7 @@ public sealed class MainForm : Form
             new PageRttView(_host),
             new PageWatchView(_host),
             new PageSvdView(_host),
+            new PageMemoryView(_host),
             new PageDownloadView(_host),
             new PageLogView(_host),
             _settingsPage,
@@ -510,7 +514,9 @@ public sealed class MainForm : Form
                     ? "结构体树状监控 · 高频波形实时投射"
                     : view is PageSvdView
                         ? "外设寄存器位域调试 · 安全 Read-Modify-Write"
-                        : view is PageDownloadView
+                        : view is PageMemoryView
+                            ? "RAM / 内部 Flash / 外部 Flash 十六进制查看与导出"
+                            : view is PageDownloadView
                             ? "固件烧写 · J-Link Flash 算法 · .bin / .hex / .elf"
                             : view is PageLogView
                             ? "连接日志 · 工程事件 · 操作审计"

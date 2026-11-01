@@ -63,6 +63,9 @@ public sealed class NavSidebar : Control
     public string UserName { get; set; } = "JLink Engineer";
     public string UserRole { get; set; } = "Embedded Dev";
 
+    /// <summary>侧边栏底部右侧的版本标识（空则不绘制）。</summary>
+    public string VersionText { get; set; } = string.Empty;
+
     /// <summary>品牌区主标题（默认软件名，运行时改为当前芯片型号）。</summary>
     public string BrandTitle { get; set; } = "JLink-Studio-Pro";
 
@@ -415,5 +418,13 @@ public sealed class NavSidebar : Control
         TextRenderer.DrawText(g, UserRole, DarkGeekTheme.UiFontSmall,
             new Rectangle(52, _userRect.Y + 34, Width - 60, 18), DarkGeekTheme.NavTextMuted,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+
+        // 版本号与角色同一行右对齐：不额外占高度，任何子界面都常驻可见
+        if (!string.IsNullOrEmpty(VersionText))
+        {
+            TextRenderer.DrawText(g, VersionText, DarkGeekTheme.UiFontSmall,
+                new Rectangle(52, _userRect.Y + 34, Width - 66, 18), DarkGeekTheme.Primary,
+                TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        }
     }
 }
