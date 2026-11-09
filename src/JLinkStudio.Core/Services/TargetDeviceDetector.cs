@@ -88,6 +88,13 @@ public static class TargetDeviceDetector
                 notes.Add($"FICR.INFO.PART = 0x{partId:X4}（未收录）");
         }
 
+        // 3. NXP S32K1xx：SIM_SDID（S32K1 系列 SIM 基址 0x4004_8000，SDID 偏移 0x1024）
+        //    FAMILYID/PINID 编码各子系列不同，这里只做诊断提示、不自动填型号，
+        //    避免误判成错误型号后 J-Link 用错 Flash 算法。
+        if (TryRead(link, 0x40049024, out uint sdid) && sdid is not 0 and not 0xFFFFFFFF)
+            notes.Add($"检测到 SIM_SDID@0x40049024 = 0x{sdid:X8}：疑似 NXP S32K1xx，" +
+                      "请在型号库中选择具体型号（如 S32K144 / S32K148）");
+
         notes.Insert(0, core == "未知内核" ? "未能读取内核 CPUID" : $"内核：{core}");
         notes.Add("可改用「常用型号」手动指定，或在 J-Link 设备列表中查询具体型号");
         return new DeviceDetection(null, core, string.Join("；", notes));

@@ -1,6 +1,6 @@
 ---
 name: jlink-studio-pro
-description: 通过本机运行的 JLink Studio Pro 上位机（HTTP 网关 127.0.0.1:5080）调试 ARM Cortex-M 目标：连接 J-Link、按符号读写变量、外设寄存器与位域读写、波形时序采样、RTT 日志收发、固件烧写、Keil 编译。当用户提到 J-Link、SWD、STM32/GD32/NXP 在线调试、变量监视、寄存器配置、RTT 日志、烧写固件、Keil 编译时使用本技能。
+description: 通过本机运行的 JLink Studio Pro 上位机（HTTP 网关 127.0.0.1:5080）调试 ARM Cortex-M 目标：连接 J-Link、按符号读写变量、外设寄存器与位域读写、波形时序采样、RTT 日志收发、固件烧写、Keil 编译。当用户提到 J-Link、SWD、STM32/GD32/NXP（含 S32K1xx、S32K3xx）在线调试、变量监视、寄存器配置、RTT 日志、烧写固件、Keil 编译时使用本技能。
 ---
 
 # JLink Studio Pro 调试技能

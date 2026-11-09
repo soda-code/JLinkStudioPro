@@ -16,11 +16,13 @@ Windows 上位机 + J-Link 在线调试工作台：设备连接、符号变量�
 | 寄存器 | 外设 → 寄存器 → 位域三级浏览、按位域安全 Read-Modify-Write（受写保护策略约束） |
 | 内存 | 读取 RAM / 内部 Flash / 外部 Flash：地址+长度读取、16 字节/行 HEX+ASCII、自动刷新、复制、导出 `.bin` |
 | HardFault 诊断 | 抓取核心寄存器 + 故障寄存器 + 最近日志，给出定位结论 |
-| RTT 终端 | 实时日志、按通道/级别过滤、HEX 发送、快捷宏 |
+| RTT 终端 | 实时日志、按通道/级别过滤、HEX 发送 |
 | 程序下载 | `.bin/.hex/.elf` 烧写，走 J-Link 内置 Flash 算法（擦除 + 编程 + 校验），可烧后复位运行 |
 | Keil 编译 | 调用 UV4 编译 / 重编译 / 编译并烧写，输出错误定位 |
 | 运行日志 | 连接、烧写、脚本调用等会话记录，可被外部接口读取 |
 | Skill 网关 | 本机 `127.0.0.1:5080` 提供 REST 接口，附带 Swagger 定义与操作审计 |
+
+**支持的芯片**：型号库内置 ST、GigaDevice、NXP（LPC / Kinetis / i.MX RT / **S32K1xx、S32K3xx**）、Nordic、Espressif、Raspberry Pi、Microchip、TI、Infineon、Renesas 的常见型号；型号名即 J-Link 设备名，J-Link 支持的其它型号可直接手填。外设寄存器需要各自厂商的 SVD（S32K 从 NXP 官网下载 `S32K1xx.svd` / `S32K3xx.svd`），未加载 SVD 时仅提供内核 SCB（够做 HardFault 分析）。
 
 ## 环境要求
 
