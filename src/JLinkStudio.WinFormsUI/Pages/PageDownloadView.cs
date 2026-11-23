@@ -21,14 +21,11 @@ public sealed class PageDownloadView : UserControl, ISubPageView
     private readonly RoundedTextBox _txtFile = Ui.Input("", 470);
     private readonly RoundedTextBox _txtAddress = Ui.Input(InternalBaseText, 150);
     private readonly RoundedSelect _cmbTarget = Ui.Combo("片内 Flash", "片外 Flash");
-    private readonly RoundedTextBox _txtExternalDevice = Ui.Input("", 260);
-    private readonly RoundedTextBox _txtExternalBase = Ui.Input(ExternalBaseText, 150);
     private readonly FlatCheckBox _chkReset = Ui.Check("下载后复位运行", true);
     private readonly RichTextBox _log = new();
     private readonly Label _lblResult = new();
     // 在 BuildLayout 中创建，因此不能声明为 readonly
     private Label _lblAddressHint = null!;
-    private FlowLayoutPanel _rowExternal = null!;
     private FlatButton _btnDownload = null!;
     private bool _downloading;
 
@@ -47,7 +44,7 @@ public sealed class PageDownloadView : UserControl, ISubPageView
         // 文件格式决定地址是否必填，切换后缀时同步提示
         _txtFile.TextChanged += (_, _) => SafeInvoke(RefreshAddressHint);
 
-        // 下载模式切换：片外模式展开型号 / 基址，起始地址跟着切默认值
+        // 下载模式切换：起始地址跟着切片内 / 片外默认值
         _cmbTarget.SelectedIndexChanged += (_, _) => ApplyTargetMode();
 
         RefreshConnectionHint();
@@ -87,20 +84,8 @@ public sealed class PageDownloadView : UserControl, ISubPageView
         rowMode.Controls.Add(Ui.Text("下载模式", true));
         _cmbTarget.Width = 130;
         rowMode.Controls.Add(_cmbTarget);
-        rowMode.Controls.Add(Ui.Text("片内走芯片 Flash 算法；片外需选带外部存储支持的型号",
+        rowMode.Controls.Add(Ui.Text("片内走芯片 Flash 算法；片外按当前型号的外部 Flash 算法，地址默认 0x90000000",
             false, DarkGeekTheme.TextMuted, 8.5f));
-
-        // 片外设置行：仅片外模式显示
-        var rowExternal = Ui.Row(0, 6);
-        rowExternal.Controls.Add(Ui.Text("片外型号", true));
-        _txtExternalDevice.Width = 260;
-        rowExternal.Controls.Add(_txtExternalDevice);
-        rowExternal.Controls.Add(Ui.Text("片外基址", true));
-        rowExternal.Controls.Add(_txtExternalBase);
-        rowExternal.Controls.Add(Ui.Text("（型号如 STM32H743XI_QSPI；留空则沿用当前型号）",
-            false, DarkGeekTheme.TextMuted, 8.5f));
-        _rowExternal = rowExternal;
-        _rowExternal.Visible = false;
 
         // 起始地址行
         var rowAddress = Ui.Row(0, 6);
@@ -135,7 +120,6 @@ public sealed class PageDownloadView : UserControl, ISubPageView
         body.Controls.Add(Ui.WrapDisplay(_log));
         body.Controls.Add(rowActions);
         body.Controls.Add(rowAddress);
-        body.Controls.Add(rowExternal);
         body.Controls.Add(rowMode);
         body.Controls.Add(rowFile);
         card.Controls.Add(body);
@@ -190,12 +174,6 @@ public sealed class PageDownloadView : UserControl, ISubPageView
         }
 
         bool external = IsExternalMode;
-        uint externalBase = 0;
-        if (external && !TryReadExternalBase(out externalBase))
-        {
-            Report($"片外基址无法识别：{_txtExternalBase.Text.Trim()}", DarkGeekTheme.Danger);
-            return;
-        }
 
         bool isBinary = string.Equals(Path.GetExtension(path), ".bin", StringComparison.OrdinalIgnoreCase);
         if (isBinary && address == 0)
@@ -208,16 +186,13 @@ public sealed class PageDownloadView : UserControl, ISubPageView
 
         string fileName = Path.GetFileName(path);
         bool resetAfter = _chkReset.Checked;
-        string externalDevice = external ? _txtExternalDevice.Text.Trim() : string.Empty;
+        // 片外下载沿用当前型号的 Flash 算法，基址随起始地址一起填（默认 0x90000000）
         var options = new FlashDownloadOptions
         {
             Target = external ? FlashTarget.External : FlashTarget.Internal,
-            ExternalDevice = externalDevice,
-            ExternalBase = externalBase,
+            ExternalBase = external ? address : 0u,
         };
-        string modeLabel = external
-            ? $"片外 Flash（{(externalDevice.Length == 0 ? "沿用当前型号" : externalDevice)}）"
-            : "片内 Flash";
+        string modeLabel = external ? "片外 Flash" : "片内 Flash";
 
         _downloading = true;
         _btnDownload.Enabled = false;
@@ -271,24 +246,12 @@ public sealed class PageDownloadView : UserControl, ISubPageView
         return uint.TryParse(digits, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out address);
     }
 
-    /// <summary>解析片外 Flash 基址；留空按 0 处理，由核心层回退到默认基址。</summary>
-    private bool TryReadExternalBase(out uint address)
-    {
-        address = 0;
-        string text = _txtExternalBase.Text.Trim();
-        if (text.Length == 0) return true;
-
-        string digits = text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? text[2..] : text;
-        return uint.TryParse(digits, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out address);
-    }
-
     private bool IsExternalMode => _cmbTarget.SelectedIndex == 1;
 
-    /// <summary>切换下载模式：展开 / 收起片外参数，并把起始地址同步成对应的默认映射地址。</summary>
+    /// <summary>切换下载模式：起始地址同步成片内 / 片外对应的默认映射地址。</summary>
     private void ApplyTargetMode()
     {
         bool external = IsExternalMode;
-        if (_rowExternal != null) _rowExternal.Visible = external;
 
         string text = _txtAddress.Text.Trim();
         if (external && (text.Length == 0 || IsSameAddress(text, InternalBaseText)))
