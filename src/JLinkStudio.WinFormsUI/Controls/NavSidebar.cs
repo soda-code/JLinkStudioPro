@@ -34,7 +34,13 @@ public sealed class NavSidebar : Control
     private const int IconSize = 17;
 
     /// <summary>导航图标字号（比品牌图标小一号，与 9.75pt 的菜单文字更协调）。</summary>
-    private static readonly Font NavIconFont = DarkGeekTheme.CreateFontPublic(9f, FontStyle.Regular);
+    private static readonly Font NavIconFont = DarkGeekTheme.Font(9f, FontStyle.Regular);
+
+    // 绘制路径里用到的字体：全部静态复用，避免每次 OnPaint 都新建 GDI 字体
+    private static readonly Font BrandTitleFont = DarkGeekTheme.Font(11f, FontStyle.Bold);
+    private static readonly Font BrandSubtitleFont = DarkGeekTheme.Font(8.5f, FontStyle.Regular);
+    private static readonly Font NavItemActiveFont = DarkGeekTheme.Font(9.5f, FontStyle.Bold);
+    private static readonly Font NavGroupFont = DarkGeekTheme.Font(8f, FontStyle.Bold);
 
     // 模式组（顶部）：调试模式 / 查看模式，互斥
     private const int ModeCardTop = 10;
@@ -269,13 +275,13 @@ public sealed class NavSidebar : Control
                 ? new Rectangle(44, 14, Width - 52, 36)
                 : new Rectangle(44, 11, Width - 52, 22);
 
-            TextRenderer.DrawText(g, BrandTitle, DarkGeekTheme.CreateFontPublic(11f, FontStyle.Bold),
+            TextRenderer.DrawText(g, BrandTitle, BrandTitleFont,
                 titleRect, DarkGeekTheme.TextPrimary,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
 
             if (!string.IsNullOrEmpty(BrandSubtitle))
             {
-                TextRenderer.DrawText(g, BrandSubtitle, DarkGeekTheme.CreateFontPublic(8.5f, FontStyle.Regular),
+                TextRenderer.DrawText(g, BrandSubtitle, BrandSubtitleFont,
                     new Rectangle(44, 31, Width - 52, 18), DarkGeekTheme.TextMuted,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
             }
@@ -322,7 +328,7 @@ public sealed class NavSidebar : Control
         if (Collapsed) return;
 
         TextRenderer.DrawText(g, title,
-            active ? DarkGeekTheme.CreateFontPublic(9.5f, FontStyle.Bold) : DarkGeekTheme.UiFont,
+            active ? NavItemActiveFont : DarkGeekTheme.UiFont,
             new Rectangle(bounds.X + 30, bounds.Y, bounds.Width - 34, bounds.Height),
             active ? DarkGeekTheme.NavActiveText : DarkGeekTheme.NavText,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding |
@@ -332,7 +338,7 @@ public sealed class NavSidebar : Control
     private void DrawGroupHeader(Graphics g, string title, int y)
     {
         TextRenderer.DrawText(g, title.ToUpperInvariant(),
-            DarkGeekTheme.CreateFontPublic(8f, FontStyle.Bold),
+            NavGroupFont,
             new Rectangle(14, y, Width - 24, 18),
             DarkGeekTheme.NavGroupText,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);

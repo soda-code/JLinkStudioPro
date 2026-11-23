@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Drawing.Drawing2D;
+using System.Reflection;
 
 namespace JLinkStudio.WinFormsUI.Theme;
 
@@ -58,13 +60,24 @@ public static class DarkGeekTheme
     public static readonly Color Selection = Hex("#DBEAFE");      // blue-100
     public static readonly Color SelectionText = Hex("#1E3A8A");  // blue-900
 
-    public static readonly Font UiFont = CreateFont(new[] { "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI" }, 9.75f);
-    public static readonly Font UiFontSmall = CreateFont(new[] { "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI" }, 8.75f);
-    public static readonly Font UiFontBold = CreateFont(new[] { "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI" }, 10.5f, FontStyle.Bold);
-    public static readonly Font TitleFont = CreateFont(new[] { "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI" }, 12f, FontStyle.Bold);
-    public static readonly Font MonoFont = CreateFont(new[] { "JetBrains Mono", "Cascadia Code", "Consolas", "Courier New" }, 9.5f);
-    public static readonly Font MonoFontSmall = CreateFont(new[] { "JetBrains Mono", "Cascadia Code", "Consolas", "Courier New" }, 8.5f);
-    public static readonly Font IconFont = CreateFont(new[] { "Segoe UI Emoji", "Segoe UI Symbol", "Microsoft YaHei UI" }, 12f);
+    // ── 字体：按「族 + 字号 + 字重」缓存，同一组合永远复用同一实例 ──
+    private static readonly string[] UiFamilies = { "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI" };
+    private static readonly string[] MonoFamilies = { "JetBrains Mono", "Cascadia Code", "Consolas", "Courier New" };
+    private static readonly string[] IconFamilies = { "Segoe UI Emoji", "Segoe UI Symbol", "Microsoft YaHei UI" };
+
+    /// <summary>已安装字体族：首次用到时枚举一次（FontFamily.Families 单次约 1.4 ms）。</summary>
+    private static readonly Lazy<HashSet<string>> InstalledFamilies = new(() =>
+        FontFamily.Families.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase));
+
+    private static readonly ConcurrentDictionary<(string Kind, float Size, FontStyle Style), Font> FontCache = new();
+
+    public static readonly Font UiFont = Font(9.75f);
+    public static readonly Font UiFontSmall = Font(8.75f);
+    public static readonly Font UiFontBold = Font(10.5f, FontStyle.Bold);
+    public static readonly Font TitleFont = Font(12f, FontStyle.Bold);
+    public static readonly Font MonoFont = Mono(9.5f);
+    public static readonly Font MonoFontSmall = Mono(8.5f);
+    public static readonly Font IconFont = Icon(12f);
 
     public static Color Hex(string hex) => ColorTranslator.FromHtml(hex);
 
@@ -87,15 +100,31 @@ public static class DarkGeekTheme
             (int)(from.B + (to.B - from.B) * ratio));
     }
 
-    public static Font CreateFontPublic(float size, FontStyle style = FontStyle.Regular) =>
-        CreateFont(new[] { "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI" }, size, style);
+    /// <summary>
+    /// 取缓存的界面字体。同「字号 + 字重」返回同一实例，可直接用于绘制，
+    /// <b>不要 Dispose</b>（它是共享实例）。相比每次 new Font 省掉一次字体族枚举。
+    /// </summary>
+    public static Font Font(float size, FontStyle style = FontStyle.Regular) =>
+        Cache("ui", UiFamilies, size, style);
 
-    private static Font CreateFont(string[] candidates, float size, FontStyle style = FontStyle.Regular)
+    /// <summary>等宽字体（日志、寄存器、内存视图），同样按字号缓存。</summary>
+    public static Font Mono(float size, FontStyle style = FontStyle.Regular) =>
+        Cache("mono", MonoFamilies, size, style);
+
+    /// <summary>图标字体（导航图标、状态灯），同样按字号缓存。</summary>
+    public static Font Icon(float size, FontStyle style = FontStyle.Regular) =>
+        Cache("icon", IconFamilies, size, style);
+
+    public static Font CreateFontPublic(float size, FontStyle style = FontStyle.Regular) => Font(size, style);
+
+    private static Font Cache(string kind, string[] candidates, float size, FontStyle style) =>
+        FontCache.GetOrAdd((kind, size, style), key => CreateFont(candidates, key.Size, key.Style));
+
+    private static Font CreateFont(string[] candidates, float size, FontStyle style)
     {
-        var installed = FontFamily.Families.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var name in candidates)
         {
-            if (installed.Contains(name))
+            if (InstalledFamilies.Value.Contains(name))
                 return new Font(name, size, style, GraphicsUnit.Point);
         }
         return new Font(FontFamily.GenericSansSerif, size, style, GraphicsUnit.Point);
@@ -119,9 +148,28 @@ public static class DarkGeekTheme
         return path;
     }
 
+    /// <summary>
+    /// DataGridView 的 DoubleBuffered 是 protected，用反射打开：滚动 / 刷新单元格时不再闪烁。
+    /// 反射失败只是退化成默认绘制，不影响功能。
+    /// </summary>
+    private static void EnableDoubleBuffering(DataGridView grid)
+    {
+        try
+        {
+            typeof(DataGridView)
+                .GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.SetValue(grid, true);
+        }
+        catch (Exception)
+        {
+            // 忽略：拿不到私有属性就维持系统默认
+        }
+    }
+
     /// <summary>统一暗色 DataGridView 视觉。</summary>
     public static void StyleGrid(DataGridView grid, bool readOnly = true)
     {
+        EnableDoubleBuffering(grid);
         grid.EnableHeadersVisualStyles = false;
         grid.BackgroundColor = CardBack;
         grid.BorderStyle = BorderStyle.None;

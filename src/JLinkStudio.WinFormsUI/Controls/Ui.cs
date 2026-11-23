@@ -14,8 +14,8 @@ public static class Ui
             ForeColor = color ?? DarkGeekTheme.TextSecondary,
             BackColor = Color.Transparent,
             Font = bold
-                ? DarkGeekTheme.CreateFontPublic(size ?? 10f, FontStyle.Bold)
-                : DarkGeekTheme.CreateFontPublic(size ?? 9.75f, FontStyle.Regular),
+                ? DarkGeekTheme.Font(size ?? 10f, FontStyle.Bold)
+                : DarkGeekTheme.Font(size ?? 9.75f, FontStyle.Regular),
             Margin = new Padding(0, 6, 8, 0),
         };
     }
