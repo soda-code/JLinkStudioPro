@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using JLinkStudio.Core.Models;
 using JLinkStudio.Core.Services;
 using JLinkStudio.WinFormsUI.Controls;
 using JLinkStudio.WinFormsUI.Navigation;
@@ -13,14 +14,21 @@ namespace JLinkStudio.WinFormsUI.Pages;
 /// </summary>
 public sealed class PageDownloadView : UserControl, ISubPageView
 {
+    private const string InternalBaseText = "0x08000000";
+    private const string ExternalBaseText = "0x90000000";
+
     private readonly AppHost _host;
     private readonly RoundedTextBox _txtFile = Ui.Input("", 470);
-    private readonly RoundedTextBox _txtAddress = Ui.Input("0x08000000", 150);
+    private readonly RoundedTextBox _txtAddress = Ui.Input(InternalBaseText, 150);
+    private readonly RoundedSelect _cmbTarget = Ui.Combo("片内 Flash", "片外 Flash");
+    private readonly RoundedTextBox _txtExternalDevice = Ui.Input("", 260);
+    private readonly RoundedTextBox _txtExternalBase = Ui.Input(ExternalBaseText, 150);
     private readonly FlatCheckBox _chkReset = Ui.Check("下载后复位运行", true);
     private readonly RichTextBox _log = new();
     private readonly Label _lblResult = new();
     // 在 BuildLayout 中创建，因此不能声明为 readonly
     private Label _lblAddressHint = null!;
+    private FlowLayoutPanel _rowExternal = null!;
     private FlatButton _btnDownload = null!;
     private bool _downloading;
 
@@ -38,8 +46,12 @@ public sealed class PageDownloadView : UserControl, ISubPageView
 
         // 文件格式决定地址是否必填，切换后缀时同步提示
         _txtFile.TextChanged += (_, _) => SafeInvoke(RefreshAddressHint);
+
+        // 下载模式切换：片外模式展开型号 / 基址，起始地址跟着切默认值
+        _cmbTarget.SelectedIndexChanged += (_, _) => ApplyTargetMode();
+
         RefreshConnectionHint();
-        RefreshAddressHint();
+        ApplyTargetMode();
     }
 
     private StudioContext Ctx => _host.Context;
@@ -69,6 +81,26 @@ public sealed class PageDownloadView : UserControl, ISubPageView
         rowFile.Controls.Add(Ui.Text("固件文件", true));
         rowFile.Controls.Add(_txtFile);
         rowFile.Controls.Add(Ui.Button("浏览…", ButtonKind.Ghost, (_, _) => BrowseFirmware(), 76));
+
+        // 下载模式行：片内 Flash / 片外 Flash
+        var rowMode = Ui.Row(0, 6);
+        rowMode.Controls.Add(Ui.Text("下载模式", true));
+        _cmbTarget.Width = 130;
+        rowMode.Controls.Add(_cmbTarget);
+        rowMode.Controls.Add(Ui.Text("片内走芯片 Flash 算法；片外需选带外部存储支持的型号",
+            false, DarkGeekTheme.TextMuted, 8.5f));
+
+        // 片外设置行：仅片外模式显示
+        var rowExternal = Ui.Row(0, 6);
+        rowExternal.Controls.Add(Ui.Text("片外型号", true));
+        _txtExternalDevice.Width = 260;
+        rowExternal.Controls.Add(_txtExternalDevice);
+        rowExternal.Controls.Add(Ui.Text("片外基址", true));
+        rowExternal.Controls.Add(_txtExternalBase);
+        rowExternal.Controls.Add(Ui.Text("（型号如 STM32H743XI_QSPI；留空则沿用当前型号）",
+            false, DarkGeekTheme.TextMuted, 8.5f));
+        _rowExternal = rowExternal;
+        _rowExternal.Visible = false;
 
         // 起始地址行
         var rowAddress = Ui.Row(0, 6);
@@ -103,6 +135,8 @@ public sealed class PageDownloadView : UserControl, ISubPageView
         body.Controls.Add(Ui.WrapDisplay(_log));
         body.Controls.Add(rowActions);
         body.Controls.Add(rowAddress);
+        body.Controls.Add(rowExternal);
+        body.Controls.Add(rowMode);
         body.Controls.Add(rowFile);
         card.Controls.Add(body);
         return card;
@@ -155,24 +189,45 @@ public sealed class PageDownloadView : UserControl, ISubPageView
             return;
         }
 
+        bool external = IsExternalMode;
+        uint externalBase = 0;
+        if (external && !TryReadExternalBase(out externalBase))
+        {
+            Report($"片外基址无法识别：{_txtExternalBase.Text.Trim()}", DarkGeekTheme.Danger);
+            return;
+        }
+
         bool isBinary = string.Equals(Path.GetExtension(path), ".bin", StringComparison.OrdinalIgnoreCase);
         if (isBinary && address == 0)
         {
-            Report(".bin 固件必须填写起始地址（例如 0x08000000）。", DarkGeekTheme.Danger);
+            Report(external
+                ? ".bin 固件必须填写片外 Flash 起始地址（例如 0x90000000）。"
+                : ".bin 固件必须填写起始地址（例如 0x08000000）。", DarkGeekTheme.Danger);
             return;
         }
 
         string fileName = Path.GetFileName(path);
         bool resetAfter = _chkReset.Checked;
+        string externalDevice = external ? _txtExternalDevice.Text.Trim() : string.Empty;
+        var options = new FlashDownloadOptions
+        {
+            Target = external ? FlashTarget.External : FlashTarget.Internal,
+            ExternalDevice = externalDevice,
+            ExternalBase = externalBase,
+        };
+        string modeLabel = external
+            ? $"片外 Flash（{(externalDevice.Length == 0 ? "沿用当前型号" : externalDevice)}）"
+            : "片内 Flash";
+
         _downloading = true;
         _btnDownload.Enabled = false;
         Report($"正在下载 {fileName} …", DarkGeekTheme.Warning);
-        AppendLog($"开始下载 {fileName} → {(address == 0 ? "文件自带地址" : $"0x{address:X8}")}");
+        AppendLog($"开始下载 {fileName} → {(address == 0 ? "文件自带地址" : $"0x{address:X8}")} · {modeLabel}");
 
         var stopwatch = Stopwatch.StartNew();
         var (ok, error) = await Task.Run(() =>
         {
-            bool done = link.DownloadFile(path, address, out string message);
+            bool done = link.DownloadFile(path, address, options, out string message);
             return (done, message);
         });
         stopwatch.Stop();
@@ -198,7 +253,8 @@ public sealed class PageDownloadView : UserControl, ISubPageView
         }
 
         Ctx.Audit.Add("ui", ok ? "DOWNLOAD" : "DOWNLOAD_ERR", "/jlink/download",
-            $"{fileName} → {(address == 0 ? "file" : $"0x{address:X8}")} · {stopwatch.ElapsedMilliseconds} ms · {(ok ? "成功" : error)}");
+            $"{fileName} → {(address == 0 ? "file" : $"0x{address:X8}")} · {modeLabel} · " +
+            $"{stopwatch.ElapsedMilliseconds} ms · {(ok ? "成功" : error)}");
 
         _downloading = false;
         _btnDownload.Enabled = true;
@@ -215,15 +271,49 @@ public sealed class PageDownloadView : UserControl, ISubPageView
         return uint.TryParse(digits, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out address);
     }
 
+    /// <summary>解析片外 Flash 基址；留空按 0 处理，由核心层回退到默认基址。</summary>
+    private bool TryReadExternalBase(out uint address)
+    {
+        address = 0;
+        string text = _txtExternalBase.Text.Trim();
+        if (text.Length == 0) return true;
+
+        string digits = text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? text[2..] : text;
+        return uint.TryParse(digits, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out address);
+    }
+
+    private bool IsExternalMode => _cmbTarget.SelectedIndex == 1;
+
+    /// <summary>切换下载模式：展开 / 收起片外参数，并把起始地址同步成对应的默认映射地址。</summary>
+    private void ApplyTargetMode()
+    {
+        bool external = IsExternalMode;
+        if (_rowExternal != null) _rowExternal.Visible = external;
+
+        string text = _txtAddress.Text.Trim();
+        if (external && (text.Length == 0 || IsSameAddress(text, InternalBaseText)))
+            _txtAddress.Text = ExternalBaseText;
+        else if (!external && IsSameAddress(text, ExternalBaseText))
+            _txtAddress.Text = InternalBaseText;
+
+        RefreshAddressHint();
+    }
+
+    private static bool IsSameAddress(string left, string right) =>
+        string.Equals(left.Trim(), right, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>.bin 没有地址信息，未填地址时给出更醒目的提示。</summary>
     private void RefreshAddressHint()
     {
         bool isBinary = string.Equals(Path.GetExtension(_txtFile.Text.Trim()), ".bin", StringComparison.OrdinalIgnoreCase);
+        string example = IsExternalMode ? ExternalBaseText : InternalBaseText;
+
         _lblAddressHint.Text = isBinary
-            ? "（.bin 必须填写烧写起始地址，例如 0x08000000）"
+            ? $"（.bin 必须填写烧写起始地址，例如 {example}）"
             : "（.bin 必填；.hex / .elf 使用文件自带地址）";
         _lblAddressHint.ForeColor = isBinary ? DarkGeekTheme.Warning : DarkGeekTheme.TextMuted;
     }
+
 
     private void RefreshConnectionHint()
     {

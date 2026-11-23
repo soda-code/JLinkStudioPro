@@ -20,6 +20,10 @@ public sealed class JLinkWrapper : IJLinkLink
     private long _bytesRead;
     private long _bytesWritten;
 
+    // 连接参数：片外下载需要临时换型号重连，之后按这些值切回原型号
+    private string? _serialNumber;
+    private JLinkInterface _iface = JLinkInterface.SWD;
+
     /// <summary>进入硬件总线临界区；信号量已释放（Dispose 竞态）时返回 false 而非抛异常。</summary>
     private bool TryEnterBus(TimeSpan timeout)
     {
@@ -136,6 +140,8 @@ public sealed class JLinkWrapper : IJLinkLink
 
                 IsConnected = true;
                 _speedKhz = connectedSpeed;
+                _serialNumber = serialNumber;
+                _iface = iface;
                 int sn = SafeGetSn();
                 Description = $"J-Link (SN: {sn}) · {TargetDevice} · {iface} {connectedSpeed}kHz" +
                               (connectedSpeed != speedKhz ? $"（已自动降速，请求 {speedKhz}kHz）" : string.Empty);
@@ -324,10 +330,81 @@ public sealed class JLinkWrapper : IJLinkLink
     private static readonly TimeSpan FlashTimeout = TimeSpan.FromSeconds(180);
 
     /// <summary>
+    /// 下载固件。片内直接烧写；片外（QSPI / NOR / SDRAM）在型号不同时临时切换 J-Link 型号重连，
+    /// 烧完切回原型号，保证调试会话参数不变。
+    /// </summary>
+    public bool DownloadFile(string filePath, uint address, FlashDownloadOptions options, out string error)
+    {
+        error = string.Empty;
+        options ??= FlashDownloadOptions.Internal;
+
+        // 片外：.bin 未填地址时用片外基址，避免用户还要手动记住 0x90000000 这类映射地址
+        if (options.Target == FlashTarget.External && address == 0)
+            address = options.ExternalBase;
+
+        if (options.Target != FlashTarget.External)
+            return DownloadCore(filePath, address, out error);
+
+        string externalDevice = (options.ExternalDevice ?? string.Empty).Trim();
+
+        // 未指定片外型号，或型号与当前一致：沿用当前型号的 Flash 算法
+        if (externalDevice.Length == 0 ||
+            string.Equals(externalDevice, TargetDevice, StringComparison.OrdinalIgnoreCase))
+            return DownloadCore(filePath, address, out error);
+
+        return DownloadWithDeviceSwitch(externalDevice, filePath, address, out error);
+    }
+
+    /// <summary>
+    /// 临时切到片外下载型号完成烧写，再切回原型号。
+    /// 失败时也会尝试切回，避免调试器停在错误的芯片型号上。
+    /// </summary>
+    private bool DownloadWithDeviceSwitch(string device, string filePath, uint address, out string error)
+    {
+        error = string.Empty;
+
+        string originalDevice = TargetDevice;
+        string? serial = _serialNumber;
+        JLinkInterface iface = _iface;
+        int speed = _speedKhz > 0 ? _speedKhz : 4000;
+
+        if (!Open(serial, device, iface, speed, out string switchError))
+        {
+            error = $"切换到片外下载型号 “{device}” 失败：{switchError}" +
+                    RestoreDevice(originalDevice, serial, iface, speed);
+            return false;
+        }
+
+        bool ok = false;
+        try
+        {
+            ok = DownloadCore(filePath, address, out error);
+        }
+        finally
+        {
+            string restore = RestoreDevice(originalDevice, serial, iface, speed);
+            if (restore.Length > 0)
+                error = ok ? $"下载完成，但切回原型号失败：{restore}" : $"{error}{restore}";
+        }
+
+        return ok;
+    }
+
+    /// <summary>切回原型号；成功返回空串，失败返回可直接拼接的提示。</summary>
+    private string RestoreDevice(string device, string? serial, JLinkInterface iface, int speed)
+    {
+        if (string.IsNullOrWhiteSpace(device)) return string.Empty;
+
+        return Open(serial, device, iface, speed, out string restoreError)
+            ? string.Empty
+            : $"；切回原型号 “{device}” 失败（{restoreError}），请重新连接。";
+    }
+
+    /// <summary>
     /// 通过 J-Link 内置 Flash 算法把固件烧写到目标芯片。
     /// .bin 为纯二进制镜像必须指定起始地址，.hex / .elf / .axf 自带地址信息。
     /// </summary>
-    public bool DownloadFile(string filePath, uint address, out string error)
+    private bool DownloadCore(string filePath, uint address, out string error)
     {
         error = string.Empty;
         if (!IsConnected)

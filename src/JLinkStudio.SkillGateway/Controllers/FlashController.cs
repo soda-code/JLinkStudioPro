@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using JLinkStudio.Core.Models;
 using JLinkStudio.Core.Services;
 using JLinkStudio.SkillGateway.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -12,8 +13,11 @@ namespace JLinkStudio.SkillGateway.Controllers;
 [Route("api/v1/flash")]
 public sealed class FlashController : ControllerBase
 {
-    /// <summary>与界面「程序下载」页保持一致的默认起始地址。</summary>
+    /// <summary>与界面「程序下载」页保持一致的默认起始地址（片内 Flash）。</summary>
     private const uint DefaultFlashAddress = 0x0800_0000;
+
+    /// <summary>片外存储器默认基址（QSPI 常见映射，实际随芯片与硬件而定）。</summary>
+    private const uint DefaultExternalAddress = 0x9000_0000;
 
     private static readonly string[] SupportedExtensions =
         [".bin", ".hex", ".elf", ".axf", ".mot", ".srec"];
@@ -22,7 +26,7 @@ public sealed class FlashController : ControllerBase
 
     public FlashController(StudioContext context) => _context = context;
 
-    /// <summary>烧写前可查：支持的格式、当前型号、连接状态与默认地址。</summary>
+    /// <summary>烧写前可查：支持的格式、下载模式、当前型号、连接状态与默认地址。</summary>
     [HttpGet("status")]
     public IActionResult Status() => Ok(new
     {
@@ -32,6 +36,19 @@ public sealed class FlashController : ControllerBase
         defaultAddress = $"0x{DefaultFlashAddress:X8}",
         supportedExtensions = SupportedExtensions,
         binaryNeedsAddress = true,
+        modes = new[]
+        {
+            new
+            {
+                mode = "internal", name = "片内 Flash", defaultAddress = $"0x{DefaultFlashAddress:X8}",
+                note = "走芯片自带 Flash 算法，用当前型号即可",
+            },
+            new
+            {
+                mode = "external", name = "片外 Flash", defaultAddress = $"0x{DefaultExternalAddress:X8}",
+                note = "需要带外部存储支持的 J-Link 型号（如 STM32H743XI_QSPI），留空 device 则沿用当前型号",
+            },
+        },
     });
 
     /// <summary>
@@ -69,22 +86,49 @@ public sealed class FlashController : ControllerBase
             });
 
         bool isBinary = extension.Equals(".bin", StringComparison.OrdinalIgnoreCase);
+
+        string mode = (request.Mode ?? "internal").Trim().ToLowerInvariant();
+        if (mode is not ("internal" or "external"))
+            return BadRequest(new { success = false, error = $"mode 只支持 internal（片内）/ external（片外），当前 {request.Mode}" });
+
+        bool external = mode == "external";
+
+        uint externalBase = DefaultExternalAddress;
+        if (!string.IsNullOrWhiteSpace(request.BaseAddress) &&
+            !TryParseAddress(request.BaseAddress!, out externalBase))
+            return BadRequest(new { success = false, error = $"baseAddress 格式无效：{request.BaseAddress}（示例 0x90000000）" });
+
         uint address = 0;
         if (!string.IsNullOrWhiteSpace(request.Address) &&
             !TryParseAddress(request.Address!, out address))
             return BadRequest(new { success = false, error = $"address 格式无效：{request.Address}（示例 0x08000000）" });
 
+        // 片外 .bin 未给 address 时落到片外基址，省得调用方自己拼地址
         if (isBinary && address == 0)
-            return BadRequest(new { success = false, error = ".bin 固件必须提供 address（示例 0x08000000）" });
+        {
+            if (external) address = externalBase;
+            else return BadRequest(new { success = false, error = ".bin 固件必须提供 address（示例 0x08000000）" });
+        }
 
         var link = _context.Device.Link;
         if (link == null || !link.IsConnected)
             return StatusCode(409, new { success = false, error = "目标未连接，请先调用 /api/v1/session/config 连接。" });
 
+        string externalDevice = (request.Device ?? string.Empty).Trim();
+        var options = new FlashDownloadOptions
+        {
+            Target = external ? FlashTarget.External : FlashTarget.Internal,
+            ExternalDevice = externalDevice,
+            ExternalBase = externalBase,
+        };
+        string modeLabel = external
+            ? $"片外 Flash（{(externalDevice.Length == 0 ? "沿用当前型号" : externalDevice)}）"
+            : "片内 Flash";
+
         var stopwatch = Stopwatch.StartNew();
         var (ok, error) = await Task.Run(() =>
         {
-            bool done = link.DownloadFile(path, address, out string message);
+            bool done = link.DownloadFile(path, address, options, out string message);
             return (done, message);
         }, token);
 
@@ -96,7 +140,7 @@ public sealed class FlashController : ControllerBase
         stopwatch.Stop();
 
         string detail = $"{(isBinary ? $"0x{address:X8} " : string.Empty)}{Path.GetFileName(path)}"
-                        + $" · {stopwatch.ElapsedMilliseconds}ms"
+                        + $" · {modeLabel} · {stopwatch.ElapsedMilliseconds}ms"
                         + (ok ? (request.Reset ? (resetOk ? " · 已复位运行" : $" · 复位失败：{resetError}") : " · 未复位") : $" · {error}");
 
         _context.LogSession(ok ? $"程序下载成功（skill）：{detail}" : $"程序下载失败（skill）：{detail}");
@@ -108,6 +152,8 @@ public sealed class FlashController : ControllerBase
             {
                 success = false,
                 file = path,
+                mode,
+                device = externalDevice.Length == 0 ? null : externalDevice,
                 address = isBinary ? $"0x{address:X8}" : null,
                 elapsedMs = stopwatch.ElapsedMilliseconds,
                 error,
@@ -117,6 +163,8 @@ public sealed class FlashController : ControllerBase
         {
             success = true,
             file = path,
+            mode,
+            device = externalDevice.Length == 0 ? null : externalDevice,
             address = isBinary ? $"0x{address:X8}" : null,
             elapsedMs = stopwatch.ElapsedMilliseconds,
             reset = request.Reset,

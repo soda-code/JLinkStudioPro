@@ -72,8 +72,8 @@ Invoke-RestMethod http://127.0.0.1:5080/api/v1/session/status
 | GET | `/api/v1/rtt/status` · `/logs` | RTT 状态与日志行 |
 | POST | `/api/v1/rtt/send` | `{"text":"help\r\n","channel":0,"hex":false,"appendNewLine":false}` |
 | POST | `/api/v1/rtt/clear` | 清 RTT 缓冲 |
-| GET | `/api/v1/flash/status` | 支持格式、型号、默认地址 |
-| POST | `/api/v1/flash/download` | `{"filePath":"D:\\fw\\app.hex","address":"0x08000000","reset":true}` |
+| GET | `/api/v1/flash/status` | 支持格式、型号、默认地址、下载模式（`internal` / `external`） |
+| POST | `/api/v1/flash/download` | 片内：`{"filePath":"D:\\fw\\app.hex","address":"0x08000000","reset":true}`；片外：加 `"mode":"external","device":"STM32H743XI_QSPI","baseAddress":"0x90000000"` |
 | GET | `/api/v1/keil/status` · POST `/api/v1/keil/config`·`build`·`rebuild`·`flash`·`build-flash` | Keil 编译与烧写 |
 | GET/POST | `/api/v1/skill/policy` | 写保护策略：`writeEnabled`、`guards`（地址范围白名单）、`exposedSymbols` |
 | GET | `/api/v1/skill/audit?take=50` | 操作审计 |
@@ -91,6 +91,10 @@ Invoke-RestMethod -Method Post http://127.0.0.1:5080/api/v1/flash/download `
 ```
 
 - `.bin` **必须**给 `address`（十六进制字符串或十进制）；`.hex/.elf/.axf/.mot/.srec` 用文件内地址，`address` 可省。
+- **片内 / 片外**：`mode` 默认 `internal`（芯片自带 Flash，基址 0x08000000）。片外 QSPI / 并行 NOR / SDRAM 用 `"mode":"external"`：
+  - `device` 给带外部存储支持的 J-Link 型号（如 `STM32H743XI_QSPI`），留空表示沿用当前型号；
+  - `baseAddress` 给片外映射基址（默认 0x90000000），`.bin` 未给 `address` 时直接用它；
+  - 型号与当前不同时，会临时切换型号重连、烧完切回原型号（期间调试会话短暂断开）。
 - 走 J-Link 内置 Flash 算法，自动擦除所需扇区 + 编程 + 校验；典型耗时数百毫秒到数秒。
 - 返回码：`400` 参数/文件问题、`403` 查看模式禁止烧写、`409` 未连接、`200` 成功（含 `elapsedMs`、`running`）。
 - 失败信息里带 J-Link 原始错误码与常见原因（型号不匹配、地址越界、读保护、供电/时序）。若提示「未配置目标芯片型号」，先在 `session/config` 里给 `device`。

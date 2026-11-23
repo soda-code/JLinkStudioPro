@@ -33,8 +33,9 @@ public interface IJLinkLink : IDisposable
     /// <summary>
     /// 下载（烧写）固件到目标 Flash：.hex / .elf / .axf 使用文件自带地址，
     /// .bin 为纯二进制镜像，必须由 <paramref name="address"/> 指定烧写起始地址。
+    /// <paramref name="options"/> 指定片内 / 片外下载：片外会按需临时切换 J-Link 型号。
     /// </summary>
-    bool DownloadFile(string filePath, uint address, out string error);
+    bool DownloadFile(string filePath, uint address, FlashDownloadOptions options, out string error);
 
     /// <summary>CPU 是否处于暂停（halted）状态；运行中读取内核寄存器会被 J-Link 拒绝。</summary>
     bool IsHalted { get; }

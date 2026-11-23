@@ -201,6 +201,15 @@ public sealed class FlashDownloadRequest
 
     /// <summary>烧写完成后是否复位并运行（默认 true）。</summary>
     public bool Reset { get; set; } = true;
+
+    /// <summary>下载模式：internal（片内 Flash，默认）/ external（片外 QSPI / NOR / SDRAM）。</summary>
+    public string? Mode { get; set; }
+
+    /// <summary>片外下载使用的 J-Link 设备名，如 STM32H743XI_QSPI；留空沿用当前型号。</summary>
+    public string? Device { get; set; }
+
+    /// <summary>片外 Flash 基址（.bin 未给 address 时使用），默认 0x90000000。</summary>
+    public string? BaseAddress { get; set; }
 }
 
 /// <summary>监控项属性（不传的字段保持原值）。</summary>
