@@ -170,7 +170,7 @@ public sealed class MainForm : Form
         int availableWidth = Math.Max(900, (int)(workArea.Width / dpiScale) - 32);
         int availableHeight = Math.Max(560, (int)(workArea.Height / dpiScale) - 32);
 
-        Size wanted = LoadWindowSize() ?? DefaultClientSize;
+        Size wanted = ToGoldenRatio(LoadWindowSize() ?? DefaultClientSize);
         int width = Math.Min(wanted.Width, availableWidth);
         int height = Math.Min(wanted.Height, availableHeight);
 
@@ -190,8 +190,23 @@ public sealed class MainForm : Form
 
     // ── 窗口大小记忆 ──
 
-    /// <summary>默认窗口大小（以当前软件窗口尺寸为基准）。</summary>
-    private static readonly Size DefaultClientSize = new(1184, 634);
+    /// <summary>
+    /// 黄金比例 1.618：界面宽度 = 高度 × 1.618。宽度超过这个比例时按高度回算，
+    /// 避免窗口横向拉得过长（高度本身不动，用户主动调高不受影响）。
+    /// </summary>
+    private const double GoldenRatio = 1.618;
+
+    /// <summary>默认窗口大小：1120 × 692，宽高比恰为黄金比例。</summary>
+    private static readonly Size DefaultClientSize = new(1120, 692);
+
+    /// <summary>
+    /// 把窗口宽度收敛到黄金比例：宽度比「高度 × 1.618」还长时按比例压缩，否则原样返回。
+    /// </summary>
+    private static Size ToGoldenRatio(Size size)
+    {
+        int goldenWidth = (int)Math.Round(size.Height * GoldenRatio);
+        return goldenWidth < size.Width ? new Size(goldenWidth, size.Height) : size;
+    }
 
     private static string WindowSizeFile => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
